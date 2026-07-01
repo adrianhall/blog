@@ -47,7 +47,7 @@ while preserving all content and existing URLs. Move hosting from GitHub Pages
 | Comments | **Pluggable** `<Comments>` component; first provider **Giscus** on the new repo's Discussions |
 | Analytics | **Cloudflare Web Analytics only** (drop Clarity + Disqus) |
 | Search | **Pagefind** (static, full-text) |
-| Theme | Light + dark with OS-aware toggle; **two design directions reviewed first** |
+| Theme | Light + dark with OS-aware toggle; **Direction C chosen** after a 3-way review (M3) — see `design-c.css` |
 | Publishing | **`npm run publish`** (manual) **and** GitHub Actions; optionally Cloudflare↔GitHub auto-build |
 | Repo | **New repo** for the Astro site; old repo reduced to redirect-only |
 
@@ -134,7 +134,17 @@ capped reading measure (~72–75ch), light/dark toggle (OS-aware), and design to
 
 Owner picks one (or a blend) → full theme build.
 
-## Milestone 4 — Build the chosen theme
+> **Decision (locked): Direction C.** A blend added mid-review — B's color
+> palette and typefaces, A's spacing/shape/component design, and the widest
+> content area of the three (owner feedback: liked pieces of both, wanted
+> more width). Refined once more for contrast (inline code) and to fully use
+> the widened column. Source of truth: `src/design-preview/styles/design-c.css`,
+> plus the "M3 implementation notes", "Addendum", and "Addendum 2" sections
+> below. **M4 builds Direction C** — A and B are kept only as historical
+> reference until M4 deletes `src/design-preview/` and
+> `src/pages/design-preview/` per the "Deferred to M4" note.
+
+## Milestone 4 — Build Direction C as the real theme
 
 - Layouts: base (header / footer / theme toggle / analytics slot), post (byline, reading time, TOC on wide screens, share, **pluggable `<Comments>`** with Giscus first), list/home, tag & category archives, 404.
 - **Cloudflare Web Analytics** snippet in the base layout (Clarity dropped).
@@ -196,8 +206,8 @@ Owner picks one (or a blend) → full theme build.
 
 - [x] M1 — Scaffold Astro (collections, schema, Expressive Code, RSS, sitemap, Pagefind, URL routing)
 - [x] M2 — Content conversion script + verification report
-- [ ] M3 — Two design directions (review gate)
-- [ ] M4 — Build chosen theme (layouts, pluggable comments/Giscus, share, analytics)
+- [x] M3 — Two design directions (review gate) — **Direction C chosen**
+- [ ] M4 — Build Direction C as the real theme (layouts, pluggable comments/Giscus, share, analytics)
 - [ ] M5 — Deploy to Cloudflare + domain + cutover/redirect
 
 ## Open confirmations for the new session
@@ -205,12 +215,20 @@ Owner picks one (or a blend) → full theme build.
 - Worker/project name — **confirmed `adrianhall-blog`** (`wrangler.jsonc`).
 - Site lives at repo root — **confirmed** (Astro at `/`).
 - New repo name — **confirmed `adrianhall/blog`** (Handoff fact #2).
+- Design direction for M4 — **confirmed Direction C**
+  (`src/design-preview/styles/design-c.css`). Do not re-litigate A vs. B;
+  start M4 by lifting C's `:root` tokens into `src/layouts/Base.astro`, then
+  work through the "Deferred to M4" list in the M3 implementation notes.
 
 ## Costs and Context
 
 - **M0** (Planning): Claude Opus 4.8 (default), $8.10, 273K context
-- **M1**: Claude Opus 4.8 (default), $20.96, 321K context
-- **M2**: Claude Opus 4.8 (default), $34.98, 429K context
+- **M1**: Claude Sonnet 5 (default), $8.38, 321K context
+  - Note: Some decisions around by_tag routing and extra categories page
+- **M2**: Claude Sonnet 5 (default), $13.99, 429K context
+  - Note: source mistakes (highlight language, bad links) propagate
+- **M3**: Claude Sonnet 5 (default), 
+  - Built a third design option, plus iterate on design C once.
 
 ## M1 implementation notes (for M2 onward)
 
@@ -274,3 +292,158 @@ Owner picks one (or a blend) → full theme build.
   `npm run build` now yields **247 pages**; `astro check` is clean (0/0/0).
 - **Deferred to later milestones:** `<Mermaid>` client rendering + component
   styling (M4); the pre-existing broken image (owner content fix).
+
+## M3 implementation notes (for M4 onward)
+
+- **Everything lives under `src/design-preview/` (tokens, layouts, helpers) and
+  `src/pages/design-preview/` (routes)** — deliberately isolated from the
+  production pipeline so it can be deleted in one shot
+  (`rm -rf src/design-preview src/pages/design-preview`) once a direction is
+  picked. Nothing under `src/layouts/`, `src/components/`, or the existing
+  `src/pages/*` was touched.
+- **Real content, not mock-ups.** Every direction renders the same **home list**
+  (8 most recent posts, real titles/dates/tags, a naive excerpt) and the same
+  **showcase post** (`2024/2024-09-03-aspnetcore-options` — picked for its
+  multi-language code blocks and two `<Notice type="success">` callouts)
+  through the actual MDX pipeline (`getEntry` + `render()`), so Expressive
+  Code, `<Notice>`, `<Figure>` all render for real. Only the showcase post's
+  title links to its styled `post.html`; the other list titles are plain text
+  (no styled destination exists for them yet) — noted on the comparison page
+  so it doesn't read as a bug.
+- **Self-contained stylesheets**, `src/design-preview/styles/design-{a,b,c}.css`,
+  each defining the *same* token contract (`--color-*`, `--font-*`, `--space-*`,
+  `--radius-*`, `--measure`, `--shell-max`) with different values — whichever
+  direction wins, its file's `:root` tokens are the intended starting point for
+  the real M4 theme.
+  - **A — Restrained editorial:** serif headings / sans body, warm cream ↔
+    near-black-warm palette, muted terracotta accent, generous spacing, quiet
+    code blocks (no shadow, blends into the reading column).
+  - **B — Technical / developer:** all-sans, tighter type, blue accent, code
+    blocks get dark terminal-style chrome **regardless of page theme** and are
+    allowed to run wider than the prose measure (`--measure + 6rem`) — the
+    "prominent code styling" from the plan.
+  - **C — Editorial spacing, developer palette** (added after owner feedback,
+    see the addendum below): B's colors/fonts on A's spacing/shape/quiet code
+    chrome, at the widest measure of the three.
+  - All three: a `.article-grid` on the post page adds a sticky `.article-rail`
+    (published date, reading time, categories, tags) beside the prose column
+    at ≥1100px — a light stand-in for the real M4 "TOC on wide screens", and
+    the concrete demonstration of "widescreen shell" (not just a centered
+    narrow column).
+- **Light/dark is attribute-driven**, not just the media query: an inline
+  head script sets `document.documentElement.dataset.theme` from
+  `localStorage['bda-preview-theme']` (falling back to
+  `prefers-color-scheme`) before first paint, and a toggle button in the
+  header flips + persists it. The key is shared across every direction on
+  purpose, so switching between them via the "View this page as Direction X"
+  links keeps whichever mode you picked.
+- **`astro.config.mjs` gained one real (non-preview-only) change:**
+  `expressiveCode({ themeCssSelector: (theme) => `[data-theme='${theme.type}']` })`.
+  By default Expressive Code only follows `prefers-color-scheme` unless you
+  select its bundled theme *by name* (`data-theme="github-light"`); pointing
+  its selector at `theme.type` (always `'dark'`/`'light'`) makes it follow the
+  **same** `data-theme` attribute our toggle sets, so code blocks now switch
+  with the rest of the page. `useDarkModeMediaQuery` is untouched, so the
+  no-JS / never-touched-the-toggle experience is unaffected. This will still
+  be needed in M4 regardless of which direction wins.
+- **Presentational-only helpers** in `src/design-preview/content-meta.ts`
+  (`excerptOf`, `readingTimeMinutes`) derive a teaser and a rough reading time
+  from the raw MDX body. Neither concept exists in the content schema
+  (`src/content.config.ts`) — kept out of `src/utils/` intentionally so it's
+  obvious this doesn't feed the real pipeline; M4 should make a deliberate
+  call on whether either becomes real (an `excerpt` front-matter field, a
+  proper word-count that skips code blocks, etc.).
+- **Gotcha (fixed):** `.post-list li { … border-bottom … }` is a *descendant*
+  selector, and each tag pill is *also* an `<li>` (`<li class="tag-pill">`
+  inside `<ul class="tag-list">` inside the card) — so it was picking up the
+  card's padding/border/grid styles too, producing a stray rule under every
+  tagged post. Fixed with the child combinator (`.post-list > li`) in both
+  stylesheets. Worth remembering for M4: any nested `<li>`/`<ul>` inside a
+  styled list item needs the same care.
+- **Not part of the URL contract:** `/design-preview/**` is excluded from
+  `sitemap.xml`/`robots.txt` (both are hand-built from fixed lists — see
+  `src/pages/sitemap.xml.ts`) and every preview page is marked
+  `<meta name="robots" content="noindex, nofollow">` as a second layer.
+  `scripts/assert-build.mjs` gained five assertions for the review pages so a
+  broken preview build still fails CI; `scripts/verify-urls.mjs` reports the
+  five new paths as allowed extras (unchanged otherwise). `npm run build` now
+  yields **252 pages**; `astro check` is clean (0/0/0).
+- **Verification:** built, `astro check`, `npm run check` (URL contract), and
+  `npm run assert` all pass. Both directions were also visually checked with a
+  scripted Playwright pass (desktop 1440px + mobile 390px, light + dark) —
+  caught the `.post-list li` bug above before sign-off.
+- **Deferred to M4 (now decided: Direction C):** promote `design-c.css`'s
+  `:root` tokens into the real `src/layouts/Base.astro`; delete
+  `src/design-preview/` and `src/pages/design-preview/` entirely (A and B
+  included); wire the toggle into the real header; extend the sticky rail
+  into a real TOC; restyle `<Mermaid>` (still just a `<pre>`, per the M2
+  notes) to match; style the tag and category archive pages, which M3
+  intentionally left untouched.
+
+### Addendum — Direction C, added after owner feedback on A + B
+
+Feedback: liked bits of both — B's color scheme and fonts, A's spacing and
+design — and both felt too narrow. Rather than a third from-scratch direction,
+**C is an explicit blend**, plus a width increase applied everywhere:
+
+- **`design-c.css`** takes B's color tokens (light + dark) and font stack
+  wholesale, and A's spacing scale, radii, shadows, and *every* component rule
+  (post-list dividers not cards, quiet no-shadow code chrome, simple
+  left-border blockquote/notice, non-bold inline code) unchanged — those rules
+  only ever reference custom properties, never a raw color or font, so
+  re-pointing the token block was the entire job. If C wins, treat
+  `design-c.css` as the source of truth (it already carries A's component
+  CSS), not A's or B's file.
+- **Widened all three**, since the "too narrow" feedback applied to both
+  existing directions, not just a reason to add a third:
+  `--measure`/`--shell-max` went from 74ch/1180px → 80ch/1320px (A), and
+  72ch/1280px → 78ch/1400px (B). **C is wider than both** at 84ch/1480px —
+  the specific, deliberate point of the new direction.
+- **Switcher generalized from 2→N directions.** The original A/B layouts had
+  a hard-coded single `counterpartHref` prop; adding a third direction meant
+  every page needed links to *two* others, not one. Refactored into a shared
+  `PreviewChrome.astro` (head/banner/nav/toggle, used by all three thin
+  `PreviewLayout{A,B,C}.astro` wrappers) driven by a `DIRECTIONS` array and a
+  `page: 'home' | 'post'` prop in `src/design-preview/config.ts`. Adding a
+  future direction D is now: one CSS file, one three-line layout wrapper, one
+  `DIRECTIONS` entry, two route files — no more N-way prop plumbing.
+- **`scripts/assert-build.mjs`** gained two more assertions
+  (`design-preview/c` + `design-preview/c/post.html`). `npm run build` now
+  yields **254 pages**; `npm run check` and `astro check` are still clean.
+  Re-verified visually with the same scripted Playwright pass (1600px desktop
+  + 390px mobile, light + dark) across all three directions.
+
+### Addendum 2 — Direction C refinements (inline code + wider content column)
+
+Two more rounds of owner feedback on C specifically, both fixed in
+`design-c.css` only (A and B untouched this round):
+
+- **Inline `` `code` `` spans were harsh.** `.prose :not(pre) > code` was
+  using `--color-code-bg`/`--color-code-fg` — the fixed dark-terminal tokens
+  meant for the loud, theme-independent `<pre>` treatment carried over from
+  Direction B. On inline spans that read as a jarring black box in light mode
+  and barely registered in dark mode (both backgrounds are already near-black
+  there). Switched to `--color-surface`/`--color-fg`/`--color-border` — tokens
+  that already invert correctly with `data-theme` — plus a `1px solid` border,
+  so inline code is now a quiet bordered chip in the same visual family as the
+  `.expressive-code` blocks (curvy 1px box, theme-correct bg/fg) without
+  needing new tokens. **Not implemented:** true per-token syntax highlighting
+  of inline snippets — Expressive Code only tokenizes fenced blocks, not bare
+  `` `code` `` spans; doing that would mean adding a remark/rehype step to
+  run inline code through Shiki too, which is a bigger, separate change.
+- **Content column wasn't using the full width.** At `--shell-max: 1480px`
+  the `.article-grid` content column was `minmax(0, var(--measure))` with
+  `--measure: 84ch` (~950px rendered) next to a 280px rail — leaving ~150px of
+  the 1100px available to the column unused, because a `ch`-based cap doesn't
+  grow to fill a `minmax(0, …)` grid track on its own. Fixed by widening
+  `--shell-max` to **1650px** and switching `--measure` from `84ch` to a fixed
+  **`1270px`** — sized to exactly fill what's left after the shell padding,
+  the grid gap, and the (unchanged) 280px rail:
+  `1650 − 2×24 (padding) − 52 (gap) − 280 (rail) = 1270`. The math is exact
+  (confirmed via Playwright bounding boxes: grid 1602px / prose 1270px / rail
+  280px, zero leftover), and the rail still collapses at the same ≥1100px
+  breakpoint since that threshold was never tied to `--measure` or
+  `--shell-max`. Trade-off worth flagging: at this width, body-text
+  paragraphs run well past the ~90ch typically recommended for prose
+  readability — an accepted, deliberate choice for this direction's "let code
+  blocks and wide content breathe" goal, not an oversight.

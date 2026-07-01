@@ -30,6 +30,16 @@ export default defineConfig({
     expressiveCode({
       plugins: [pluginLineNumbers()],
       defaultProps: { showLineNumbers: false },
+      // Default themes are `github-dark` + `github-light` (each theme's
+      // `.type` is exactly 'dark' | 'light'). Selecting on `[data-theme='dark']`
+      // / `[data-theme='light']` — instead of EC's default per-theme-name
+      // selector — lets a single site-wide `data-theme` attribute (set by our
+      // own manual light/dark toggle) drive BOTH the page chrome CSS and the
+      // Expressive Code syntax theme together. `useDarkModeMediaQuery`
+      // defaults to `true` for a dark+light theme pair, so pages still get the
+      // right code theme from `prefers-color-scheme` before any toggle JS runs
+      // or for users who never touch the toggle.
+      themeCssSelector: (theme) => `[data-theme='${theme.type}']`,
     }),
     mdx(),
   ],

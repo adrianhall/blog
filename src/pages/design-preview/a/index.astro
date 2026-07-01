@@ -1,0 +1,51 @@
+---
+// Milestone 3 review page — Direction A, home-list view. Real posts, real
+// dates/tags/URLs; not a production route (see MIGRATION_PLAN.md § M3).
+import PreviewLayoutA from '../../../design-preview/PreviewLayoutA.astro';
+import { getSortedPosts, getPostDate } from '../../../utils/posts';
+import { excerptOf } from '../../../design-preview/content-meta';
+import { HOME_PREVIEW_COUNT, SHOWCASE_POST_ID } from '../../../design-preview/config';
+
+const posts = (await getSortedPosts()).slice(0, HOME_PREVIEW_COUNT);
+---
+
+<PreviewLayoutA title="Because Developers are Awesome" page="home">
+  <h1 class="page-title">Because Developers are Awesome</h1>
+  <p class="page-lede">
+    Musings about cloud development. The {HOME_PREVIEW_COUNT} most recent posts, shown here with real
+    titles, dates, and tags for the Milestone 3 review.
+  </p>
+
+  <ul class="post-list">
+    {
+      posts.map((post) => {
+        const isShowcase = post.id === SHOWCASE_POST_ID;
+        return (
+          <li>
+            <time datetime={getPostDate(post).toISOString()}>
+              {getPostDate(post).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </time>
+            <div class="post-card__body">
+              <h2>
+                {isShowcase ? (
+                  <a href="/design-preview/a/post.html">{post.data.title}</a>
+                ) : (
+                  post.data.title
+                )}
+              </h2>
+              {post.data.tags.length > 0 && (
+                <ul class="tag-list">
+                  {post.data.tags.map((tag) => (
+                    <li class="tag-pill">{tag}</li>
+                  ))}
+                </ul>
+              )}
+              <p class="excerpt">{excerptOf(post.body)}</p>
+              {isShowcase && <p><a href="/design-preview/a/post.html">Read the full styled post →</a></p>}
+            </div>
+          </li>
+        );
+      })
+    }
+  </ul>
+</PreviewLayoutA>

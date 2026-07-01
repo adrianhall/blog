@@ -1,0 +1,172 @@
+---
+// Milestone 3 review-gate landing page. Links to the design directions so the
+// owner can compare them side by side before M4 builds the real theme.
+// See MIGRATION_PLAN.md § "Milestone 3 — Two design directions". Direction C
+// was added after initial feedback on A + B (see the M3 addendum in that
+// file): B's colors/fonts + A's spacing/design, wider than both.
+// Not a production route: excluded from sitemap.xml/feeds (which are
+// hand-built from a fixed URL list, see src/pages/sitemap.xml.ts) and marked
+// noindex below as a second layer of protection.
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Milestone 3 — Design direction review</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --fg: #16181d;
+        --muted: #5b6270;
+        --border: #dfe3e8;
+        --surface: #f6f7f9;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #14161a;
+          --fg: #e9ebef;
+          --muted: #9aa1ad;
+          --border: #2b2f36;
+          --surface: #1c1f24;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Roboto, sans-serif;
+        line-height: 1.6;
+      }
+
+      .wrap {
+        max-width: 880px;
+        margin: 0 auto;
+        padding: 3rem 1.5rem 4rem;
+      }
+
+      h1 {
+        font-size: 1.75rem;
+        margin-bottom: 0.5rem;
+      }
+
+      p.lede {
+        color: var(--muted);
+        max-width: 68ch;
+      }
+
+      .directions {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.25rem;
+        margin: 2.5rem 0;
+      }
+
+      .card {
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        background: var(--surface);
+      }
+
+      .card h2 {
+        margin-top: 0;
+        font-size: 1.15rem;
+      }
+
+      .card p {
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .card .links {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1rem;
+        font-size: 0.95rem;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .card .links a {
+        font-weight: 600;
+      }
+
+      .notes {
+        border-top: 1px solid var(--border);
+        padding-top: 1.5rem;
+        font-size: 0.95rem;
+        color: var(--muted);
+      }
+
+      .notes li {
+        margin-bottom: 0.5rem;
+      }
+
+      code {
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        padding: 0.1em 0.35em;
+        border-radius: 0.25rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Milestone 3 — Design direction review</h1>
+      <p class="lede">
+        Three styled directions on the same real content — the home list and one full post
+        (<code>2024-09-03-aspnetcore-options</code>, chosen for its code blocks and callouts).
+        All three use a widescreen shell, a capped reading measure, an OS-aware light/dark toggle, and a
+        documented set of color/type/spacing/radius tokens. Pick one (or ask for another blend) to move
+        to Milestone 4, where it becomes the real theme.
+      </p>
+
+      <div class="directions">
+        <div class="card">
+          <h2>A — Restrained editorial</h2>
+          <p>Serif headings over a sans body, generous whitespace, a single muted terracotta accent. Code sits quietly within the reading column.</p>
+          <div class="links">
+            <a href="/design-preview/a/">Home list →</a>
+            <a href="/design-preview/a/post.html">Sample post →</a>
+          </div>
+        </div>
+        <div class="card">
+          <h2>B — Technical / developer</h2>
+          <p>All-sans, tighter type, a confident blue accent. Code blocks get terminal-style chrome and are allowed to run wider than the prose column.</p>
+          <div class="links">
+            <a href="/design-preview/b/">Home list →</a>
+            <a href="/design-preview/b/post.html">Sample post →</a>
+          </div>
+        </div>
+        <div class="card">
+          <h2>C — Editorial spacing, developer palette</h2>
+          <p>A blend added after feedback on A + B: B's all-sans typefaces and blue/dark-terminal color palette, paired with A's generous spacing and quiet, near-flat component design — and the widest content area of the three.</p>
+          <div class="links">
+            <a href="/design-preview/c/">Home list →</a>
+            <a href="/design-preview/c/post.html">Sample post →</a>
+          </div>
+        </div>
+      </div>
+
+      <ul class="notes">
+        <li>Each direction has its own light/dark toggle (top right) — try both. The choice is remembered per-browser and shared across directions, so switching between them keeps whichever mode you picked.</li>
+        <li>Links inside the rendered post body go to real production post URLs, which still use the Milestone 1 placeholder layout — that's expected, not a bug.</li>
+        <li>Only the showcased post is wired to the full styled article view; the other titles on the home list are plain text for now.</li>
+        <li>This page and everything under <code>/design-preview/</code> is a temporary review artifact (Milestone 3) — it is marked <code>noindex</code> and is not linked from the real site. It will be deleted once Milestone 4 builds the chosen theme.</li>
+      </ul>
+    </div>
+  </body>
+</html>

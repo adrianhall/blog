@@ -1,0 +1,124 @@
+---
+// Shared shell markup for every Milestone 3 review-gate direction. Each
+// `PreviewLayout*.astro` is a thin wrapper that imports its own stylesheet and
+// renders this component with its `directionKey` — the switcher, theme
+// toggle, and head boilerplate all live here ONCE so adding/removing a
+// direction doesn't mean editing N near-identical layout files.
+// Delete alongside the rest of `src/design-preview/` and
+// `src/pages/design-preview/` once M4 picks a direction.
+import { DIRECTIONS, directionHref, type DirectionKey } from './config';
+
+interface Props {
+  directionKey: DirectionKey;
+  title: string;
+  description: string;
+  /** Which equivalent page this is, so the switcher and nav both link correctly. */
+  page: 'home' | 'post';
+}
+
+const { directionKey, title, description, page } = Astro.props;
+
+const current = DIRECTIONS.find((d) => d.key === directionKey);
+if (!current) {
+  throw new Error(`design-preview: unknown direction key "${directionKey}".`);
+}
+const others = DIRECTIONS.filter((d) => d.key !== directionKey);
+const homeHref = directionHref(directionKey, 'home');
+const postHref = directionHref(directionKey, 'post');
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="description" content={description} />
+    <title>{title} · Direction {directionKey.toUpperCase()}</title>
+    <script is:inline>
+      // Set the theme attribute before first paint to avoid a flash of the
+      // wrong theme. Mirrors the eventual M4 approach; scoped to its own
+      // localStorage key so it never collides with a future production toggle.
+      // Shared across ALL directions on purpose, so switching between them
+      // keeps whichever mode you picked.
+      (function () {
+        var KEY = 'bda-preview-theme';
+        try {
+          var stored = localStorage.getItem(KEY);
+          var theme = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          document.documentElement.dataset.theme = theme;
+        } catch (err) {
+          // Ignore (e.g. storage disabled) — falls back to the CSS media query.
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div class="review-banner">
+      <div class="review-banner__inner">
+        <span><strong>Direction {directionKey.toUpperCase()}</strong> — {current.label.replace(/^[A-Z] — /, '')} (Milestone 3 review build)</span>
+        <a href="/design-preview/">← All directions</a>
+        {others.map((d) => (
+          <a href={directionHref(d.key, page)}>View this page as Direction {d.key.toUpperCase()} →</a>
+        ))}
+      </div>
+    </div>
+
+    <header class="shell-header">
+      <div class="shell-header__inner">
+        <a class="brand" href="/design-preview/">Because Developers are Awesome</a>
+        <nav class="shell-nav" aria-label="Preview navigation">
+          <a href={homeHref} aria-current={page === 'home' ? 'page' : undefined}>Home list</a>
+          <a href={postHref} aria-current={page === 'post' ? 'page' : undefined}>Sample post</a>
+        </nav>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">
+          <svg class="icon icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+          </svg>
+          <svg class="icon icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="shell-main">
+      <slot />
+    </main>
+
+    <footer class="shell-footer">
+      <div class="shell-footer__inner">
+        Milestone 3 design-direction review build — not a production URL. See <code>MIGRATION_PLAN.md</code>.
+      </div>
+    </footer>
+
+    <script>
+      const KEY = 'bda-preview-theme';
+      const button = document.getElementById('theme-toggle');
+
+      function currentTheme(): 'light' | 'dark' {
+        return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+      }
+
+      function syncLabel() {
+        const theme = currentTheme();
+        button?.setAttribute('aria-label', theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
+        button?.setAttribute('aria-pressed', String(theme === 'dark'));
+      }
+
+      button?.addEventListener('click', () => {
+        const next = currentTheme() === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = next;
+        try {
+          localStorage.setItem(KEY, next);
+        } catch (err) {
+          // Ignore (e.g. storage disabled).
+        }
+        syncLabel();
+      });
+
+      syncLabel();
+    </script>
+  </body>
+</html>
