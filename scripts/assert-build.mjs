@@ -29,14 +29,17 @@ function assertDir(rel) {
 }
 
 // --- Posts render as literal `.html` FILES (the critical M1 risk) -----------
+// These are real converted posts (M2). The fixture set was removed by the
+// clean-regenerate in scripts/convert-content.mjs.
 assertFile('posts/2017/2017-08-11-integrating-react-native-typescript-mobx.html');
 assertFile('posts/2024/2024-06-04-devcontainers.html');
-assertFile('posts/2025/2025-01-01-sample-mdx.html'); // MDX pipeline
+assertFile('posts/2024/2024-09-13-aspnet-identity-part2.html'); // MDX + <Mermaid>/<Notice>
 assertFile('privacy.html');
 
 // --- Listings & taxonomy render as trailing-slash DIRECTORIES ---------------
 assertFile('index.html'); // home (root)
 assertDir('posts');
+assertDir('page/2'); // root pagination (needs >10 posts — real content in M2)
 assertDir('tags');
 assertDir('categories'); // additive landing
 assertDir('tags/react-native'); // slugified tag page

@@ -2,6 +2,7 @@
 import { defineConfig } from 'astro/config';
 import mdx from '@astrojs/mdx';
 import expressiveCode from 'astro-expressive-code';
+import { pluginLineNumbers } from '@expressive-code/plugin-line-numbers';
 
 // https://astro.build/config
 export default defineConfig({
@@ -21,5 +22,15 @@ export default defineConfig({
   trailingSlash: 'ignore',
 
   // Expressive Code must be registered before MDX so its blocks work in .mdx too.
-  integrations: [expressiveCode(), mdx()],
+  // The line-numbers plugin renders the old Jekyll `linenos` / kramdown
+  // `.line-numbers` blocks. It is OFF by default and opted into per code block
+  // via a `showLineNumbers` meta flag (emitted by scripts/convert-content.mjs);
+  // `startLineNumber=N` reproduces the old `data-start` offset.
+  integrations: [
+    expressiveCode({
+      plugins: [pluginLineNumbers()],
+      defaultProps: { showLineNumbers: false },
+    }),
+    mdx(),
+  ],
 });

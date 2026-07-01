@@ -1,0 +1,131 @@
+---
+title: "Easy EditText content validation with Kotlin"
+categories:
+  - Mobile
+tags:
+  - android
+  - kotlin
+---
+
+One of the things that I always deal with in my apps is the need to validate the input fields of a form. I can easily do this with this sample fragment of code (for example, for a length check):
+
+```kotlin
+field.addTextChangeListener(object: TextWatcher {
+  override fun afterTextChanged(s: Editable?) {
+    val content = s?.text.toString()
+    s?.error = if (content.length >= 6) null else "Minimum length = 6"
+  }
+  override fun beforeTextChanged(s: Editable?) { }
+  override fun onTextChanged(s: Editable?) { }
+})
+field.error = if (field.text.toString().length >= 6) null else "Minimum length = 6"
+```
+
+The TextWatcher is used to detect changes in the EditText control — roughly akin to “if the text changes, do something”. I use `EditText.setError()` (well, the Kotlin equivalent) to alert the UI that there is an issue with the input field. Android renders this as part of the UI with an alert icon and a message box.
+
+This is mildly horrible code and an artifact of the Java classes that are used underneath. I’ve got boilerplate code (from the TextWatcher class) and duplicated code (because I have to set the error initially as well as validate the text along the way).
+
+What would an ideal form look like? How about something like this?
+
+```kotlin
+field.validate("Minimum length is 6") { s -> s.lemngth >= 6 }
+```
+
+Instead of 10 lines of code, I only need to write 1 line of code plus bring in an extension function or two (which I can make part of my standard library of extension functions).
+
+## The afterTextChanged extension
+
+I like to split this problem up. For instance, the `addTextChangeListener` piece is a useful function in itself. I have this in my standard library of Kotlin extensions:
+
+```kotlin
+fun EditText.afterTextChanged(afterTextChanged: (String) -> Unit) {
+    this.addTextChangedListener(object: TextWatcher {
+        override fun afterTextChanged(s: Editable?) {
+            afterTextChanged.invoke(s.toString())
+        }
+
+        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) { }
+
+        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { }
+    })
+}
+```
+
+Note the definition of the Kotlin lambda function `afterTextChanged`. It takes a string and doesn’t need a return value. This simplifies my original example to the following:
+
+```kotlin
+field.afterTextChanged {
+  val content = it.text.toString()
+  it.error = if (content.length >= 6) null else "message"
+}
+field.error = if (content.length >= 6) null else "message"
+```
+
+This is much improved already, but I still have duplicated code.
+
+## The validate extension
+
+I can abstract this duplicate code out with another extension function:
+
+```kotlin
+fun EditText.validate(message: String, validator: (String) -> Boolean) {
+    this.afterTextChanged {
+        this.error = if (validator(it)) null else message
+    }
+    this.error = if (validator(this.text.toString())) null else message
+}
+```
+
+My validator is a lambda (or function) that takes a string and returns a boolean. I can also deal with the duplication here so my main code-path is not duplicating the code.
+
+I have one more useful extension function to check that a string is a valid email address:
+
+```kotlin
+fun String.isValidEmail(): Boolean
+  = this.isNotEmpty() && Patterns.EMAIL_ADDRESS.matcher(this).matches()
+```
+
+Put these together, and I can do the following:
+
+```kotlin
+user_field.validate("Valid email address required") { s -> s.isValidEmail() }
+```
+
+This is must more readable than the original 10–12 lines of code (depending on how much compression you do to avoid multiple lines). When you run an app with this code, you may see the following:
+
+![](/assets/images/2018/2018-04-11-image1.png)
+
+When the user types in a valid email address, the icon and message go away.
+
+Should you always use extension functions to make your code more readable? Probably not. However, you will find a number of utility functions that you use repeatedly. These are candidates for your standard extensions. You can find more on GitHub (check out [https://github.com/jitinsharma/Kotlin.someExtensions](https://github.com/jitinsharma/Kotlin.someExtensions) as an example)
+
+Lambdas and extension functions are just two of the many reasons I love Kotlin!
+
+
+{/* AWS Links */}
+[AWS Amplify]: https://aws-amplify.github.io?utm_source=da&utm_medium=blog&utm_campaign=adrianha
+[amplify-get-started]: https://aws-amplify.github.io/media/get_started?utm_source=da&utm_medium=blog&utm_campaign=adrianha
+[AWS Amplify Console]: https://aws.amazon.com/amplify/console/
+[AWS AppSync]: https://aws.amazon.com/appsync
+[AWS CloudFormation]: https://aws.amazon.com/cloudformation
+[AWS Device Farm]: https://aws.amazon.com/device-farm
+[AWS Elastic Beanstalk]: https://aws.amazon.com/elasticbeanstalk/
+[AWS Lambda]: https://aws.amazon.com/lambda
+[Amazon API Gateway]: https://aws.amazon.com/api-gateway/
+[Amazon CloudFront]: https://aws.amazon.com/cloudfront
+[Amazon CloudWatch]: https://aws.amazon.com/cloudwatch
+[Amazon Cognito]: https://aws.amazon.com/cognito
+[Amazon DynamoDB]: https://aws.amazon.com/dynamodb
+[Amazon Lightsail]: https://aws.amazon.com/lightsail/
+[Amazon Pinpoint]: https://aws.amazon.com/pinpoint
+[Amazon S3]: https://aws.amazon.com/s3
+[Amazon Translate]: https://aws.amazon.com/translate
+
+{/* Consoles */}
+[AWS AppSync console]: https://console.aws.amazon.com/appsync/home
+[AWS Lambda console]: https://console.aws.amazon.com/lambda/home
+
+{/* My Links */}
+[Twitter]: https://twitter.com/FizzyInTheHall
+[GraphQL]: https://graphql.org/learn
+[Serverless Framework]: https://serverless.com/framework/docs/providers/aws/guide/quick-start/

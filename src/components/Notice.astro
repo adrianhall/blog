@@ -1,0 +1,15 @@
+---
+// Minimal callout component (M2). Replaces the old Minimal Mistakes kramdown
+// `{: .notice--success|warning|info }` blockquotes. Styling is intentionally
+// minimal here; the themed treatment arrives in M4.
+interface Props {
+  /** Callout intent. Source typos (notice-warning, notice--information) are
+   *  normalised to these three values by scripts/convert-content.mjs. */
+  type?: 'success' | 'warning' | 'info';
+}
+const { type = 'info' } = Astro.props;
+---
+
+<aside class={`notice notice--${type}`} role="note">
+  <slot />
+</aside>

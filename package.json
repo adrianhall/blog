@@ -10,7 +10,7 @@
     "dev": "astro dev",
     "build": "astro build && pagefind --site dist",
     "preview": "astro preview",
-    "check": "astro check",
+    "check": "astro check && node scripts/verify-urls.mjs",
     "convert": "node scripts/convert-content.mjs",
     "assert": "node scripts/assert-build.mjs",
     "publish": "npm run build && npm run check && wrangler deploy"
@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
+    "@expressive-code/plugin-line-numbers": "^0.44.0",
     "pagefind": "^1.5.2",
     "typescript": "^6.0.3",
     "wrangler": "^4.106.0"

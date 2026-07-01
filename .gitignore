@@ -6,6 +6,8 @@ dist/
 node_modules/
 # pagefind
 /pagefind/
+# generated conversion report (re-created by `npm run convert`)
+conversion-report.md
 # logs
 npm-debug.log*
 # environment

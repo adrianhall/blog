@@ -1,0 +1,17 @@
+---
+// Minimal centered-image component (M2). Replaces the old kramdown
+// `![alt](src){: .center-image}` construct. Styling is minimal here; the themed
+// treatment (max-width, captions, borders) arrives in M4.
+interface Props {
+  src: string;
+  alt?: string;
+  /** Optional caption rendered as <figcaption>. */
+  caption?: string;
+}
+const { src, alt = '', caption } = Astro.props;
+---
+
+<figure class="center-image">
+  <img src={src} alt={alt} loading="lazy" decoding="async" />
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>

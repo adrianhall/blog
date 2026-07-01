@@ -1,0 +1,37 @@
+---
+// URL-contract compatibility route: `/tags/page/<num>/`.
+//
+// The old Jekyll `_pages/tags.html` had `pagination: enabled`, so
+// jekyll-paginate-v2 emitted `/tags/page/2..N/` as paginated POST-LIST pages
+// (page 1 — `/tags/` — is the tag cloud; pages 2+ listed posts). We reproduce
+// pages 2..N here with the same paginated post list so those indexed URLs keep
+// resolving. Page 1 is intentionally omitted (it is `/tags/`).
+import Base from '../../../../layouts/Base.astro';
+import PostList from '../../../../components/PostList.astro';
+import { getSortedPosts, PER_PAGE } from '../../../../utils/posts';
+
+export async function getStaticPaths() {
+  const posts = await getSortedPosts();
+  const totalPages = Math.max(1, Math.ceil(posts.length / PER_PAGE));
+  const paths = [];
+  for (let num = 2; num <= totalPages; num++) {
+    paths.push({ params: { num: String(num) }, props: { num, totalPages } });
+  }
+  return paths;
+}
+
+// Props (num, totalPages) are inferred from getStaticPaths above.
+const { num, totalPages } = Astro.props;
+const posts = await getSortedPosts();
+const pagePosts = posts.slice((num - 1) * PER_PAGE, num * PER_PAGE);
+
+const prevHref = num === 2 ? '/tags/' : `/tags/page/${num - 1}/`;
+const nextHref = num < totalPages ? `/tags/page/${num + 1}/` : null;
+---
+
+<Base title={`Tags - page ${num}`}>
+  <h1>Tags — page {num} of {totalPages}</h1>
+  <PostList posts={pagePosts} />
+  <a rel="prev" href={prevHref}>← Newer posts</a>
+  {nextHref && <a rel="next" href={nextHref}>Older posts →</a>}
+</Base>
