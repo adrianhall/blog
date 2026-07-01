@@ -227,7 +227,7 @@ Owner picks one (or a blend) → full theme build.
   - Note: Some decisions around by_tag routing and extra categories page
 - **M2**: Claude Sonnet 5 (default), $13.99, 429K context
   - Note: source mistakes (highlight language, bad links) propagate
-- **M3**: Claude Sonnet 5 (default), 
+- **M3**: Claude Sonnet 5 (default),  $25.75, 550K context
   - Built a third design option, plus iterate on design C once.
 
 ## M1 implementation notes (for M2 onward)
