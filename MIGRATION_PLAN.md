@@ -179,7 +179,10 @@ Owner picks one (or a blend) → full theme build.
 
 ## Publishing & deployment
 
-**Proposed `package.json` scripts**
+> Implemented in M5 — this section now describes the real, live config (see
+> M5 implementation notes for how it got here), not a proposal.
+
+**`package.json` scripts**
 
 ```json
 {
@@ -188,27 +191,45 @@ Owner picks one (or a blend) → full theme build.
     "build": "astro build && pagefind --site dist",
     "preview": "astro preview",
     "check": "astro check && node scripts/verify-urls.mjs",
+    "snapshot-urls": "node scripts/verify-urls.mjs --freeze",
     "convert": "node scripts/convert-content.mjs",
+    "assert": "node scripts/assert-build.mjs",
     "publish": "npm run build && npm run check && wrangler deploy"
   }
 }
 ```
 
-**Proposed `wrangler.jsonc` (assets-only static site)**
+**`wrangler.jsonc`**
 
 ```jsonc
 {
   "name": "adrianhall-blog",
   "compatibility_date": "2025-01-01",
-  "assets": { "directory": "./dist" }
+  "main": "./worker/index.ts",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "html_handling": "none",
+    "run_worker_first": true,
+    "not_found_handling": "404-page"
+  },
+  "routes": [{ "pattern": "blog.adrianhall.uk", "custom_domain": true }]
 }
 ```
 
-> A tiny Worker entry can be added later for edge redirects/headers; not required for the static site itself.
+> The Worker entry turned out to be **required**, not optional — see the
+> `html_handling` note in the M5 implementation notes for why. It does
+> exactly one thing (directory-index resolution for trailing-slash paths);
+> it does not run any edge redirects/headers logic.
 
 - **Manual publish:** `npm run publish` (build → verify URLs → `wrangler deploy`).
-- **CI (GitHub Actions):** same steps on push to `main` using `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`, deploying via `wrangler deploy`.
-- **Optional:** connect the repo to the Worker (Cloudflare Workers Builds / Git integration) for auto-deploy. Manual `npm run publish` remains available either way.
+- **CI (GitHub Actions):** `.github/workflows/deploy.yml` runs the same
+  steps on push to `main` (plus `workflow_dispatch`), using the
+  `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` + `PUBLIC_CF_BEACON_TOKEN`
+  repo secrets and `cloudflare/wrangler-action@v3`.
+- **Not done:** Git integration / Cloudflare Workers Builds auto-deploy —
+  GitHub Actions covers this instead; `npm run publish` remains available
+  for manual/local deploys either way.
 
 ---
 
@@ -239,7 +260,7 @@ Owner picks one (or a blend) → full theme build.
 - [x] M2 — Content conversion script + verification report
 - [x] M3 — Two design directions (review gate) — **Direction C chosen**
 - [x] M4 — Build Direction C as the real theme (layouts, pluggable comments/Giscus, share, analytics)
-- [ ] M5 — Deploy to Cloudflare + domain + CI/CD
+- [x] M5 — Deploy to Cloudflare + domain + CI/CD
 - [ ] M6 — Cut over `adrianhall.github.io` to a redirect (split from M5)
 
 ## Open confirmations for the new session
@@ -263,8 +284,11 @@ Owner picks one (or a blend) → full theme build.
   - Built a third design option, plus iterate on design C once.
 - **M4**: Claude Sonnet 5 (default), $20.00, 534K context
   - Bug: AddToAny was not implemented properly, so that was added
-- **M5**: Claude Sonnet 5 (default), including plan section,
-  - Bug: html_handling was not set properly - needed to switch to "none" and add code
+- **M5**: Claude Sonnet 5 (default), including plan section
+  - Bug: `html_handling` was not set properly — needed to switch to `"none"`
+    and add a small Worker script (`worker/index.ts`) to reimplement
+    directory-index resolution; see M5 implementation notes for the full
+    story.
 
 ## M1 implementation notes (for M2 onward)
 
@@ -688,3 +712,127 @@ design decision point).
   component. If a fourth turns up, scoping `.prose` rules to `.prose > *`
   or a dedicated `:where(...)` exclusion list may be worth doing proactively
   instead of patching one component at a time.
+
+## M5 implementation notes (for M6 onward)
+
+`blog.adrianhall.uk` is live on Cloudflare Workers Static Assets, verified
+end-to-end, and redeploys automatically on every push to `main`. The old
+repo (`adrianhall.github.io`) was **not** touched — that's M6.
+
+- **Custom Domain via `wrangler.jsonc`, not the dashboard.** Added
+  `routes: [{ pattern: "blog.adrianhall.uk", custom_domain: true }]`; on
+  `wrangler deploy` Cloudflare provisions the DNS record and Advanced
+  Certificate automatically — no manual dashboard click needed, confirmed
+  live (`dig blog.adrianhall.uk` resolves to Cloudflare anycast IPs, TLS
+  cert issued).
+- **The API token needed a zone-level permission that isn't DNS or SSL.**
+  The token started with only account-level Workers Scripts + zone Read —
+  enough to deploy the Worker and assets, but the *first* `wrangler deploy`
+  with the `custom_domain` route failed on `/zones/:id/workers/routes` with
+  a generic "Authentication error [code: 10000]". Adding Zone → SSL and
+  Certificates → Edit did **not** fix it (confirmed by direct API probes
+  before and after); the actual missing scope is the separate zone-level
+  **Workers Routes** permission group, confirmed by probing
+  `GET /zones/:id/workers/routes` directly (same 10000 error, and it's
+  absent from the token's own reported `permissions` array). Once granted,
+  it took a short propagation delay before the *exact same* `wrangler
+  deploy` succeeded — the next attempt (this time from CI, a few minutes
+  later) attached the Custom Domain on the first try. **Lesson:** if a
+  Cloudflare API token error is a bare `[code: 10000] Authentication
+  error` with no detail, don't assume it's the permission category the
+  error's context suggests (DNS/SSL, because the failing call was
+  zone-scoped) — probe the *specific* endpoint directly
+  (`GET /zones/:id/workers/routes`) to find the actual missing permission
+  group, and allow for propagation lag after granting it.
+- **Workers Static Assets' `html_handling` broke the URL contract on the
+  very first deploy** — caught immediately by a post-deploy curl pass, not
+  by any pre-deploy check (`npm run check`/`assert` only diff `dist`
+  against itself; they can't catch a *server*-level routing decision).
+  The default (`auto-trailing-slash`) 307-redirected every literal `.html`
+  post URL and `/privacy.html` to an extensionless path. None of
+  Cloudflare's four `html_handling` presets can express this site's
+  required *mixed* scheme (literal `.html` files for posts/privacy,
+  trailing-slash directories for everything else — the same scheme M1
+  chose `build.format: "preserve"` specifically to produce): the
+  trailing-slash presets change the canonical shape of the file-style
+  routes too (which would mean rewriting every URL-generating file in the
+  app — `astro.config.mjs`, `getPostUrl()`, the sitemap/feed builders, the
+  `canonicalPath` prop M4 added — and would leave every page's own
+  `<link rel="canonical">` pointing at a URL that immediately redirects
+  away from itself), and `"none"` serves `.html` files correctly but stops
+  resolving `/folder/` → `/folder/index.html` entirely, which would 404
+  every directory-style route. **Fix:** `html_handling: "none"` (disable
+  Cloudflare's built-in rewriting entirely) plus a new `worker/index.ts`
+  entry — the "tiny Worker" `wrangler.jsonc` had been noting as optional
+  since M1 turned out to be required — that does exactly one thing: if a
+  request path ends in `/`, append `index.html` before handing off to the
+  `ASSETS` binding. `run_worker_first: true` so every request reaches it
+  deterministically rather than relying on undocumented ordering between
+  the "serve static assets directly" fast path and `not_found_handling`.
+  Zero app/content changes, zero redirects, the URL contract holds byte-
+  for-byte. Verified live: every contract route (posts, `/privacy.html`,
+  `/`, `/posts/`, `/tags/`, `/categories/`, tag/category detail pages,
+  `/tags/page/2/`, feeds, sitemap, robots.txt) returns `200` directly with
+  the correct `content-type`, and `/404.html` still renders for unmatched
+  paths.
+- **The URL contract check needed to survive without the old Jekyll repo.**
+  `scripts/verify-urls.mjs` (M2) diffs `dist` against a live `<source>/_site`
+  build — fine locally, but CI never checks out `adrianhall.github.io` (a
+  different repo), so the check would `process.exit(1)` on every run.
+  Rather than skip the check in CI (which would let a future regression
+  through silently), the expected-URL set is now frozen once into a
+  committed `scripts/legacy-urls.json` (`npm run snapshot-urls`, i.e.
+  `verify-urls.mjs --freeze`); the script prefers a live `_site` when
+  present (so the manifest can still be regenerated locally) and falls back
+  to the manifest otherwise. This is a legitimate one-time freeze, not a
+  workaround — the legacy site is retired and its URL set will never change
+  again.
+- **`PUBLIC_CF_BEACON_TOKEN` is a build-time var, not a deploy-time one** —
+  a mistake caught before it shipped, while writing `deploy.yml`: Astro/Vite
+  inlines `PUBLIC_`-prefixed env vars into the HTML at `astro build` time
+  (`src/components/Analytics.astro` reads it via `import.meta.env`);
+  `wrangler deploy` only uploads the already-built `./dist` afterwards, so
+  setting the var on the deploy step (where it's tempting to put it, next
+  to the other two Cloudflare secrets) would have been a silent no-op that
+  shipped a beacon-less site. It's set on the **Build** step in
+  `deploy.yml` instead. Verified live: the beacon `<script>` with the
+  correct token renders in the deployed HTML `<head>`.
+- **Web Analytics site creation has no public API** — confirmed by direct
+  probing (the dashboard's own `rum/site_info` endpoint 403s even with
+  fairly broad token permissions) — so the owner created the site and
+  copied the token from the dashboard by hand (Account Home → Analytics &
+  Logs → Web Analytics → Add a site → `blog.adrianhall.uk`). Everything
+  downstream of having the token (wiring it into `.env`, the
+  `PUBLIC_CF_BEACON_TOKEN` GitHub secret, confirming it renders) was
+  automated.
+- **CI/CD**: `.github/workflows/deploy.yml` — `npm ci` → `npm run build`
+  (with the beacon token) → `npm run check` → `cloudflare/wrangler-action@v3
+  deploy`, on every push to `main` plus `workflow_dispatch`. Three repo
+  secrets set (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
+  `PUBLIC_CF_BEACON_TOKEN`). Verified with two real pushes to `main`, both
+  green, both confirmed against the live site afterward (not just a green
+  checkmark) — the second one is what caught and confirmed the
+  `html_handling` fix actually worked in the CI-built/deployed artifact,
+  not just the locally-published one.
+- **Verification**: `npm run build`/`check`/`assert` all pass locally
+  (248 pages, 0 URL-contract diffs against the frozen manifest, 43 files
+  type-checked including the new `worker/index.ts`). Live verification
+  against `https://blog.adrianhall.uk`: curl status/content-type checks
+  across every contract route class; a scripted Playwright pass (1600px
+  desktop + 390px mobile, light + dark) across home, `/tags/`, a Mermaid
+  post, a `<Notice>` post, and a `<Figure>` post — all rendered correctly,
+  zero unexpected console errors. The two console errors that *do* appear
+  on every post page are `giscus.app/api/discussions` 404s, confirmed (by
+  `curl`-ing the same URL directly and by reading the live Giscus iframe's
+  own rendered text: "0 reactions · 0 comments · Sign in with GitHub") to
+  be the exact expected M4-documented "no discussion yet" state, not a
+  regression.
+- **Deferred to M6** (deliberately, per the split at the top of this
+  milestone): cutting `adrianhall.github.io` over to a redirect. The new
+  site being fully live and verified first was the point of the split.
+- **Not done in M5**: no `workers.dev` preview subdomain was left enabled
+  (briefly turned on for a pre-custom-domain smoke test, then a plain
+  `wrangler deploy` — correctly, with no `workers_dev` key in
+  `wrangler.jsonc` — disabled it again on the next deploy); the site is
+  reachable only via the Custom Domain, matching the "canonical, not
+  preview" intent.
