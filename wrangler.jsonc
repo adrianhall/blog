@@ -1,0 +1,8 @@
+{
+  // Cloudflare Workers Static Assets — serves the built ./dist verbatim.
+  // A tiny Worker entry can be added later for edge redirects/headers; not
+  // required for the static site itself.
+  "name": "adrianhall-blog",
+  "compatibility_date": "2025-01-01",
+  "assets": { "directory": "./dist" }
+}

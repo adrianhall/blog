@@ -1,0 +1,16 @@
+---
+// Home page 1 -> `/`. Pages 2..N live at `/page/<num>/`.
+import Base from '../layouts/Base.astro';
+import PostList from '../components/PostList.astro';
+import { getSortedPosts, PER_PAGE } from '../utils/posts';
+
+const posts = await getSortedPosts();
+const totalPages = Math.max(1, Math.ceil(posts.length / PER_PAGE));
+const pagePosts = posts.slice(0, PER_PAGE);
+---
+
+<Base>
+  <h1>Because Developers are Awesome</h1>
+  <PostList posts={pagePosts} />
+  {totalPages > 1 && <a rel="next" href="/page/2/">Older posts →</a>}
+</Base>

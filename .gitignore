@@ -1,0 +1,18 @@
+# build output
+dist/
+# generated types
+.astro/
+# dependencies
+node_modules/
+# pagefind
+/pagefind/
+# logs
+npm-debug.log*
+# environment
+.env
+.env.production
+.dev.vars
+# wrangler
+.wrangler/
+# macOS
+.DS_Store

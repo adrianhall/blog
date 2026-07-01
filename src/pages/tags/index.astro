@@ -1,0 +1,22 @@
+---
+// Tags landing -> `/tags/`.
+import Base from '../../layouts/Base.astro';
+import { getSortedPosts } from '../../utils/posts';
+import { getTags } from '../../utils/taxonomy';
+
+const posts = await getSortedPosts();
+const tags = getTags(posts);
+---
+
+<Base title="Tags">
+  <h1>Tags</h1>
+  <ul>
+    {
+      tags.map((tag) => (
+        <li>
+          <a href={`/tags/${tag.slug}/`}>{tag.name}</a> ({tag.posts.length})
+        </li>
+      ))
+    }
+  </ul>
+</Base>

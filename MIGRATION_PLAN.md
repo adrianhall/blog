@@ -194,7 +194,7 @@ Owner picks one (or a blend) → full theme build.
 
 ## Milestone checklist
 
-- [ ] M1 — Scaffold Astro (collections, schema, Expressive Code, RSS, sitemap, Pagefind, URL routing)
+- [x] M1 — Scaffold Astro (collections, schema, Expressive Code, RSS, sitemap, Pagefind, URL routing)
 - [ ] M2 — Content conversion script + verification report
 - [ ] M3 — Two design directions (review gate)
 - [ ] M4 — Build chosen theme (layouts, pluggable comments/Giscus, share, analytics)
@@ -202,6 +202,28 @@ Owner picks one (or a blend) → full theme build.
 
 ## Open confirmations for the new session
 
-- Worker/project name (`adrianhall-blog` unless changed)
-- Confirm site lives at repo root
-- New repo name (Handoff fact #2)
+- Worker/project name — **confirmed `adrianhall-blog`** (`wrangler.jsonc`).
+- Site lives at repo root — **confirmed** (Astro at `/`).
+- New repo name — **confirmed `adrianhall/blog`** (Handoff fact #2).
+
+## M1 implementation notes (for M2 onward)
+
+- **Node 24** pinned (`.nvmrc`, `engines`). Stack: Astro 7 + TS strict, Content
+  Layer `glob` loader, MDX, `astro-expressive-code`, Pagefind (post-build step).
+- **Routing:** `build.format: "preserve"` yields the mixed layout — posts &
+  `/privacy.html` are literal `.html` **files**; listings/taxonomy are
+  trailing-slash **directories**. Post URL = `/posts/${entry.id}.html` derived in
+  `src/utils/posts.ts` (date falls back to the filename; 93 posts need this).
+- **Taxonomy slug vs raw:** archive pages use a slug (`react_native`→
+  `react-native`); per-tag feeds keep the raw value (`/feed/by_tag/react_native.xml`).
+  Both come from `src/utils/taxonomy.ts`.
+- **Decisions applied:** all 56 per-tag feeds reproduced; a `/categories/`
+  landing was **added** (old site had none).
+- **Deviation:** custom `src/pages/sitemap.xml.ts` (not `@astrojs/sitemap`, which
+  emits `/sitemap-index.xml`) to keep the exact `/sitemap.xml` path.
+- **Validation:** built on a **6-post fixture set** in `src/content/posts/`
+  (M2 replaces these with the converted 141). `scripts/assert-build.mjs`
+  (`npm run assert`) proves files-vs-dirs + endpoint paths; `astro check` is clean.
+- **Deferred to M2:** full 141-post schema validation, `scripts/convert-content.mjs`,
+  `scripts/verify-urls.mjs` (old `_site` vs `dist` diff), pagination pages
+  (`/page/2/` etc. need >10 posts), and copying `assets/images/**` into `public/`.

@@ -1,0 +1,27 @@
+---
+// File-style route -> under `build.format: "preserve"` this emits `/privacy.html`,
+// matching the legacy Jekyll permalink exactly.
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="Privacy policy">
+  <h1>Privacy policy</h1>
+
+  <ul>
+    <li>We do not sell or provide our data feeds to third parties for their use.</li>
+    <li>We do partner with standard data gathering entities to collect website metrics.</li>
+    <li>We opt out of third party usage with those data gathering entities whenever we can.</li>
+  </ul>
+
+  <p>We believe we have minimized third party usage of your browsing habits.</p>
+
+  <h2>Our partners</h2>
+
+  <p>
+    We partner with data gathering entities to capture how you use and interact with
+    our website through behavioral metrics, heatmaps, and session replay to improve
+    our products/services. Website usage data is captured using first and third-party
+    cookies and other tracking technologies to determine the popularity of individual
+    posts and online activity. Additionally, we use this information for site optimization.
+  </p>
+</Base>

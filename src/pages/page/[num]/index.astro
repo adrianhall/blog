@@ -1,0 +1,35 @@
+---
+// Home pagination pages 2..N -> `/page/<num>/`. Page 1 is the site root (`/`),
+// so it is intentionally excluded here (matches the old Jekyll behaviour).
+import Base from '../../../layouts/Base.astro';
+import PostList from '../../../components/PostList.astro';
+import { getSortedPosts, PER_PAGE } from '../../../utils/posts';
+
+export async function getStaticPaths() {
+  const posts = await getSortedPosts();
+  const totalPages = Math.max(1, Math.ceil(posts.length / PER_PAGE));
+  const paths = [];
+  for (let num = 2; num <= totalPages; num++) {
+    paths.push({ params: { num: String(num) }, props: { num, totalPages } });
+  }
+  return paths;
+}
+
+interface Props {
+  num: number;
+  totalPages: number;
+}
+const { num, totalPages } = Astro.props;
+const posts = await getSortedPosts();
+const pagePosts = posts.slice((num - 1) * PER_PAGE, num * PER_PAGE);
+
+const prevHref = num === 2 ? '/' : `/page/${num - 1}/`;
+const nextHref = num < totalPages ? `/page/${num + 1}/` : null;
+---
+
+<Base title={`Because Developers are Awesome - page ${num}`}>
+  <h1>Posts — page {num} of {totalPages}</h1>
+  <PostList posts={pagePosts} />
+  <a rel="prev" href={prevHref}>← Newer posts</a>
+  {nextHref && <a rel="next" href={nextHref}>Older posts →</a>}
+</Base>

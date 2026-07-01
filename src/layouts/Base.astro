@@ -1,0 +1,36 @@
+---
+// Minimal placeholder shell for Milestone 1. The real themed layout (header,
+// footer, theme toggle, analytics slot, TOC, comments, etc.) arrives in M4.
+interface Props {
+  title?: string;
+  description?: string;
+}
+const {
+  title = 'Because Developers are Awesome',
+  description = 'Musings about cloud development.',
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <link rel="alternate" type="application/rss+xml" title="Because Developers are Awesome" href="/feed.xml" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <header>
+      <a href="/">Because Developers are Awesome</a>
+      <nav>
+        <a href="/posts/">Posts</a>
+        <a href="/tags/">Tags</a>
+        <a href="/categories/">Categories</a>
+      </nav>
+    </header>
+    <main>
+      <slot />
+    </main>
+  </body>
+</html>

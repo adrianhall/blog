@@ -1,0 +1,26 @@
+---
+// Per-tag archive -> `/tags/<slug>/`. Index-style route so `preserve` emits a
+// directory with index.html (trailing-slash URL), matching the old site.
+import Base from '../../../layouts/Base.astro';
+import PostList from '../../../components/PostList.astro';
+import { getSortedPosts } from '../../../utils/posts';
+import { getTags, type TaxonomyGroup } from '../../../utils/taxonomy';
+
+export async function getStaticPaths() {
+  const posts = await getSortedPosts();
+  return getTags(posts).map((tag) => ({
+    params: { tag: tag.slug },
+    props: { tag },
+  }));
+}
+
+interface Props {
+  tag: TaxonomyGroup;
+}
+const { tag } = Astro.props;
+---
+
+<Base title={`Tag: ${tag.name}`}>
+  <h1>Tag: {tag.name}</h1>
+  <PostList posts={tag.posts} />
+</Base>

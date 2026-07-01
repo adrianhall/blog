@@ -1,0 +1,22 @@
+---
+import type { Post } from '../utils/posts';
+import { getPostDate, getPostUrl } from '../utils/posts';
+
+interface Props {
+  posts: Post[];
+}
+const { posts } = Astro.props;
+---
+
+<ul class="post-list">
+  {
+    posts.map((post) => (
+      <li>
+        <a href={getPostUrl(post)}>{post.data.title}</a>
+        <time datetime={getPostDate(post).toISOString()}>
+          {getPostDate(post).toISOString().slice(0, 10)}
+        </time>
+      </li>
+    ))
+  }
+</ul>

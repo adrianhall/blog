@@ -1,0 +1,25 @@
+---
+// Per-category archive -> `/categories/<slug>/`.
+import Base from '../../../layouts/Base.astro';
+import PostList from '../../../components/PostList.astro';
+import { getSortedPosts } from '../../../utils/posts';
+import { getCategories, type TaxonomyGroup } from '../../../utils/taxonomy';
+
+export async function getStaticPaths() {
+  const posts = await getSortedPosts();
+  return getCategories(posts).map((category) => ({
+    params: { category: category.slug },
+    props: { category },
+  }));
+}
+
+interface Props {
+  category: TaxonomyGroup;
+}
+const { category } = Astro.props;
+---
+
+<Base title={`Category: ${category.name}`}>
+  <h1>Category: {category.name}</h1>
+  <PostList posts={category.posts} />
+</Base>

@@ -1,0 +1,34 @@
+---
+// Individual post route. This is a FILE-style route (not `[...slug]/index.astro`)
+// so under `build.format: "preserve"` each page is emitted as a literal
+// `.html` file: `/posts/<id>.html` — preserving the exact legacy Jekyll URLs.
+import { getCollection, render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import { getPostDate } from '../../utils/posts';
+import type { Post } from '../../utils/posts';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('posts');
+  return posts.map((post) => ({
+    // `post.id` already includes the year directory, e.g.
+    // `2017/2017-08-11-integrating-react-native-typescript-mobx`.
+    params: { slug: post.id },
+    props: { post },
+  }));
+}
+
+interface Props {
+  post: Post;
+}
+const { post } = Astro.props;
+const { Content } = await render(post);
+const date = getPostDate(post);
+---
+
+<Base title={post.data.title}>
+  <article>
+    <h1>{post.data.title}</h1>
+    <time datetime={date.toISOString()}>{date.toISOString().slice(0, 10)}</time>
+    <Content />
+  </article>
+</Base>
