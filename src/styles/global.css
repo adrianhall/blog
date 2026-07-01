@@ -1,22 +1,20 @@
 /*
- * Design direction C — "Editorial spacing, developer palette"
- * (Milestone 3 review build, added after owner feedback on A + B)
+ * Production theme — "Direction C: editorial spacing, developer palette".
  *
- * A deliberate blend, not a third from-scratch direction:
- *   - Color palette + typefaces: Direction B (all-sans, blue accent, dark
- *     terminal-style code chrome).
- *   - Spacing, shape, and component design: Direction A (generous space
- *     scale, quiet near-flat shadows, small radii, dividers instead of
- *     bordered cards, code blocks that sit quietly in the reading column).
- *   - Wider content area than EITHER A or B — the specific piece of feedback
- *     that prompted this direction (`--measure` / `--shell-max` below are the
- *     largest of the three).
+ * Promoted from `src/design-preview/styles/design-c.css` (the Milestone 3
+ * review build the owner picked) per MIGRATION_PLAN.md § M4. The token
+ * contract and every component rule below started life there; see the M3
+ * "implementation notes" + two addenda in MIGRATION_PLAN.md for the design
+ * rationale (why these colors/fonts/spacing, the two inline-code + content
+ * width refinements, etc.) — this file is the itself the source of truth for
+ * the *values* now, but the *reasoning* still lives in the plan.
  *
- * Everything from the "Reset & base" section down is copied verbatim from
- * design-a.css: those rules only ever reference custom properties, never a
- * raw color or font, so re-pointing the token block below is enough to
- * reskin them. If C wins, treat this file (not A's or B's) as the source of
- * truth — it already carries A's proven component CSS.
+ * Differences from the M3 preview file:
+ *   - Dropped `.review-banner`/switcher styles (Milestone-3-only chrome).
+ *   - Added real production components the preview never needed: pagination
+ *     nav, a real table-of-contents list (nested by heading depth), share
+ *     buttons, the tag-cloud landing pages, the comments section divider, and
+ *     a small 404 treatment.
  */
 
 /* ---------------------------------------------------------------------- */
@@ -26,7 +24,7 @@
 :root {
   color-scheme: light;
 
-  /* Color — light (default). Identical to Direction B. */
+  /* Color — light (default). */
   --color-bg: #f5f7fa;
   --color-surface: #ffffff;
   --color-fg: #0e1420;
@@ -46,8 +44,7 @@
   --color-info-fg: #0969da;
   --color-info-border: #b6e3ff;
 
-  /* Type — Direction B's all-sans typefaces, but Direction A's larger,
-     airier scale/leading (softer weight below, not B's 700/800). */
+  /* Type — all-sans, airy leading. */
   --font-heading: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, 'Cascadia Code', 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
@@ -60,7 +57,7 @@
   --leading-body: 1.75;
   --leading-heading: 1.25;
 
-  /* Space — Direction A's generous scale. */
+  /* Space — generous scale. */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -70,7 +67,7 @@
   --space-7: 3.25rem;
   --space-8: 4.5rem;
 
-  /* Shape — Direction A's quiet, near-flat radii/shadows. */
+  /* Shape — quiet, near-flat radii/shadows. */
   --radius-sm: 0.1875rem;
   --radius-md: 0.25rem;
   --radius-lg: 0.5rem;
@@ -78,13 +75,9 @@
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
   --shadow-md: 0 6px 20px rgba(15, 23, 42, 0.08);
 
-  /* Layout — wider than both A and B; the specific ask behind this direction.
-     `--measure` is a fixed px (not `ch`, unlike A/B) so it can be sized to
-     exactly fill the `.article-grid` content column at `--shell-max`, rather
-     than an independent character-count cap that leaves the column narrower
-     than the space available next to the rail:
-       1650 (shell-max) - 2*24 (shell-main padding, --space-5) = 1602
-       1602 - 52 (article-grid gap, --space-7) - 280 (rail-width) = 1270 */
+  /* Layout — sized to exactly fill the `.article-grid` content column next
+     to the rail at `--shell-max` (see MIGRATION_PLAN.md § M3 Addendum 2 for
+     the exact arithmetic: 1650 - 2*24 - 52 - 280 = 1270). */
   --measure: 1270px;
   --shell-max: 1650px;
   --rail-width: 280px;
@@ -173,6 +166,27 @@ img {
   display: block;
 }
 
+main:focus {
+  outline: none;
+}
+
+.skip-link {
+  position: absolute;
+  top: -3rem;
+  left: var(--space-4);
+  z-index: 100;
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+
+.skip-link:focus {
+  top: var(--space-4);
+}
+
 /* ---------------------------------------------------------------------- */
 /* Shell                                                                  */
 /* ---------------------------------------------------------------------- */
@@ -220,29 +234,9 @@ img {
   border-bottom-color: var(--color-accent);
 }
 
-.review-banner {
-  background: var(--color-surface);
-  border-bottom: 1px dashed var(--color-border);
-  font-size: var(--text-sm);
-  color: var(--color-muted);
-}
-
-.review-banner__inner {
-  max-width: var(--shell-max);
-  margin: 0 auto;
-  padding: var(--space-3) var(--space-5);
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
-.review-banner strong {
+.shell-nav a[aria-current='page'] {
   color: var(--color-fg);
-}
-
-.review-banner a {
-  color: var(--color-accent);
+  font-weight: 600;
 }
 
 .shell-main {
@@ -261,6 +255,29 @@ img {
   max-width: var(--shell-max);
   margin: 0 auto;
   padding: var(--space-5);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.footer-links {
+  display: flex;
+  gap: var(--space-4);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.footer-links a {
+  color: var(--color-muted);
+  text-decoration: none;
+}
+
+.footer-links a:hover,
+.footer-links a:focus-visible {
+  color: var(--color-accent);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -348,11 +365,13 @@ h4 {
 .prose h2 {
   font-size: var(--text-2xl);
   margin-block: var(--space-7) var(--space-4);
+  scroll-margin-top: var(--space-5);
 }
 
 .prose h3 {
   font-size: var(--text-xl);
   margin-block: var(--space-6) var(--space-3);
+  scroll-margin-top: var(--space-5);
 }
 
 .prose p {
@@ -383,16 +402,29 @@ h4 {
   font-style: italic;
 }
 
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 var(--space-6);
+  font-size: var(--text-sm);
+}
+
+.prose th,
+.prose td {
+  border: 1px solid var(--color-border);
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+}
+
+.prose th {
+  background: var(--color-surface);
+}
+
 /* Inline code gets a quiet bordered chip that tracks the page theme — the
    same treatment family as the `.expressive-code` blocks below (curvy 1px
    border, background/foreground that flip with light/dark), NOT the fixed
    dark terminal colors (`--color-code-*`) used for the `<pre>`-level Mermaid
-   fallback. Those fixed colors read as a harsh, always-black box on the
-   light background and barely registered on the dark background — this uses
-   `--color-surface`/`--color-fg`/`--color-border`, which already invert
-   correctly with `data-theme`. It does not tokenize/syntax-highlight the
-   snippet itself — that would require running inline code through Shiki too,
-   which Expressive Code does not do for bare `` `code` `` spans. */
+   fallback. */
 .prose :not(pre) > code {
   font-family: var(--font-mono);
   font-size: 0.85em;
@@ -431,6 +463,16 @@ h4 {
   padding: 0;
 }
 
+/* `.tag-list` sits inside `.prose` on the post header (PostLayout.astro), so
+   without this override the generic `.prose li + li` vertical-rhythm rule
+   above (meant for real MDX `<ul>`/`<ol>` lists) also matches these `<li
+   class="tag-pill">` flex items, pushing every tag but the first down by
+   `--space-2` instead of keeping the row aligned. `gap` on `.tag-list`
+   already handles spacing between pills. */
+.tag-list li + li {
+  margin-top: 0;
+}
+
 .tag-pill {
   font-size: var(--text-sm);
   color: var(--color-muted);
@@ -442,8 +484,48 @@ h4 {
   color: var(--color-border);
 }
 
+/* Standalone tag/category pills — used in the /tags/ and /categories/
+   landing pages, where each entry is a link + a count, not part of a
+   post's inline tag-list. */
+.taxonomy-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: var(--shell-max);
+}
+
+.taxonomy-cloud li {
+  margin: 0;
+}
+
+.taxonomy-cloud a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-fg);
+  text-decoration: none;
+  font-size: var(--text-sm);
+}
+
+.taxonomy-cloud a:hover,
+.taxonomy-cloud a:focus-visible {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.taxonomy-cloud .count {
+  color: var(--color-muted);
+}
+
 /* ---------------------------------------------------------------------- */
-/* Article layout — widescreen shell with a quiet meta rail               */
+/* Article layout — widescreen shell with a table-of-contents rail        */
 /* ---------------------------------------------------------------------- */
 
 .article-grid {
@@ -461,6 +543,8 @@ h4 {
   .article-rail {
     position: sticky;
     top: var(--space-6);
+    max-height: calc(100vh - var(--space-6) * 2);
+    overflow-y: auto;
   }
 }
 
@@ -499,6 +583,45 @@ h4 {
 
 .article-rail dd {
   margin: 0;
+}
+
+.article-rail .tag-list {
+  margin-top: var(--space-3);
+}
+
+/* Table of contents */
+.toc {
+  margin: 0 0 var(--space-6);
+}
+
+.toc ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.toc li {
+  margin: 0;
+}
+
+.toc a {
+  display: block;
+  padding: var(--space-1) 0;
+  color: var(--color-muted);
+  text-decoration: none;
+  border-inline-start: 2px solid transparent;
+  padding-inline-start: var(--space-3);
+  margin-inline-start: calc(var(--space-3) * -1);
+}
+
+.toc a:hover,
+.toc a:focus-visible {
+  color: var(--color-accent);
+  border-inline-start-color: var(--color-accent);
+}
+
+.toc .toc-sub {
+  padding-inline-start: var(--space-4);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -560,6 +683,18 @@ pre.mermaid {
   padding: var(--space-4);
   border-radius: var(--radius-md);
   overflow-x: auto;
+  margin: var(--space-6) 0;
+}
+
+/* Once mermaid.run() has replaced the <pre> contents with an inline <svg>,
+   drop the terminal-style chrome so the diagram sits on its own (mermaid
+   themes its own background/text). */
+pre.mermaid:has(svg) {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  display: flex;
+  justify-content: center;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -570,6 +705,117 @@ pre.mermaid {
   margin: var(--space-6) 0;
   --ec-brdRad: var(--radius-md);
   --ec-frm-frameBoxShdCssVal: none;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Share buttons                                                          */
+/* ---------------------------------------------------------------------- */
+
+.share {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin: var(--space-7) 0;
+  padding-block: var(--space-5);
+  border-block: 1px solid var(--color-border);
+  max-width: var(--measure);
+}
+
+.share__label {
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+  margin-inline-end: var(--space-1);
+}
+
+/* `.share > .share__link` (not just `.share__link`) so this reliably beats
+   `.prose a` above: several of these icons (email, Bluesky, Facebook,
+   LinkedIn, Reddit, Threads) are `<a>` tags living inside `.prose` (the
+   post-page `.share` row sits inside `<article class="prose">`), and
+   `.prose a`'s single-class-plus-type specificity otherwise wins over a
+   bare `.share__link` class selector, permanently forcing those icons to
+   `--color-accent` instead of the intended neutral-by-default,
+   accent-on-hover treatment — the button-only icons (native share, copy
+   link, Mastodon) aren't `<a>` tags, so they were unaffected and stayed
+   neutral, which is what made Mastodon look conspicuously "wrong" (in dark
+   mode, neutral `--color-fg` reads as near-white next to the other icons'
+   accent blue) even though every icon had this same latent bug. Same root
+   cause as the earlier `.tag-list li + li` fix above: a generic `.prose`
+   descendant rule bleeding into a component that happens to render inside
+   the prose column. */
+.share > .share__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-fg);
+  text-decoration: none;
+  background: var(--color-surface);
+  cursor: pointer;
+  font: inherit;
+}
+
+.share > .share__link:hover,
+.share > .share__link:focus-visible {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.share__link svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.share > .share__link[data-copied='true'] {
+  border-color: var(--color-success-border);
+  color: var(--color-success-fg);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Comments                                                               */
+/* ---------------------------------------------------------------------- */
+
+.comments {
+  max-width: var(--measure);
+  margin-top: var(--space-7);
+}
+
+.comments h2 {
+  font-size: var(--text-xl);
+  margin: 0 0 var(--space-5);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Pagination                                                             */
+/* ---------------------------------------------------------------------- */
+
+.pagination-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-top: var(--space-7);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border);
+  max-width: var(--shell-max);
+  font-size: var(--text-sm);
+}
+
+.pagination-nav a {
+  color: var(--color-accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.pagination-nav a:hover,
+.pagination-nav a:focus-visible {
+  text-decoration: underline;
+}
+
+.pagination-nav .pagination-spacer {
+  color: var(--color-muted);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -633,4 +879,20 @@ pre.mermaid {
     grid-template-columns: 1fr;
     row-gap: var(--space-2);
   }
+}
+
+/* ---------------------------------------------------------------------- */
+/* 404                                                                    */
+/* ---------------------------------------------------------------------- */
+
+.error-page {
+  max-width: var(--measure);
+}
+
+.error-page .error-code {
+  font-family: var(--font-mono);
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }

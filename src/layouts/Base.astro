@@ -1,14 +1,48 @@
 ---
-// Minimal placeholder shell for Milestone 1. The real themed layout (header,
-// footer, theme toggle, analytics slot, TOC, comments, etc.) arrives in M4.
+// Site-wide shell: head/SEO boilerplate, header (brand, nav, theme toggle),
+// footer, analytics, and the pre-paint theme script + Mermaid loader. Built
+// per MIGRATION_PLAN.md § M4 by promoting the Milestone 3 "Direction C"
+// review build (`src/design-preview/PreviewChrome.astro` +
+// `styles/design-c.css`) into the real production layout — see
+// `src/styles/global.css` for the promoted stylesheet and MIGRATION_PLAN.md's
+// M4 implementation notes for what changed along the way.
+import '../styles/global.css';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import Analytics from '../components/Analytics.astro';
+
 interface Props {
   title?: string;
   description?: string;
+  /** `article` for post pages (feeds OpenGraph's article type); `website` otherwise. */
+  type?: 'website' | 'article';
+  /**
+   * The exact served path for the canonical/OpenGraph URL, e.g.
+   * `/posts/2024/2024-09-03-aspnetcore-options.html`. REQUIRED for any
+   * file-style route (posts, `/privacy.html`, `/404.html`) — `build.format:
+   * "preserve"` means those serve a literal `.html` file, but `Astro.url`
+   * reflects Astro's routing model, not the on-disk output, so it normalises
+   * away the extension into a trailing slash (`.../aspnetcore-options/`),
+   * which is simply the wrong URL for those pages. Directory-style routes
+   * (home, `/posts/`, tag/category archives) don't need this — their
+   * `Astro.url.pathname` already matches the served `.../index.html` URL.
+   */
+  canonicalPath?: string;
+  /** Set for pages that shouldn't be indexed (currently just 404). */
+  noindex?: boolean;
 }
 const {
   title = 'Because Developers are Awesome',
   description = 'Musings about cloud development.',
+  type = 'website',
+  canonicalPath,
+  noindex = false,
 } = Astro.props;
+
+const pageTitle = title === 'Because Developers are Awesome'
+  ? title
+  : `${title} · Because Developers are Awesome`;
+const canonicalUrl = new URL(canonicalPath ?? Astro.url.pathname, Astro.site);
 ---
 
 <!doctype html>
@@ -17,20 +51,84 @@ const {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalUrl} />
     <link rel="alternate" type="application/rss+xml" title="Because Developers are Awesome" href="/feed.xml" />
-    <title>{title}</title>
+    <link rel="alternate" type="application/feed+json" title="Because Developers are Awesome" href="/feed.json" />
+    <meta name="robots" content={noindex ? 'noindex, nofollow' : 'index, follow'} />
+
+    <meta property="og:type" content={type} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:site_name" content="Because Developers are Awesome" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={pageTitle} />
+    <meta name="twitter:description" content={description} />
+
+    <title>{pageTitle}</title>
+
+    <script is:inline>
+      // Set the theme attribute before first paint to avoid a flash of the
+      // wrong theme. `bda-theme` is the production key (the M3 preview build
+      // used a separate `bda-preview-theme` key so the two never collided
+      // while both existed side by side).
+      (function () {
+        var KEY = 'bda-theme';
+        try {
+          var stored = localStorage.getItem(KEY);
+          var theme = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          document.documentElement.dataset.theme = theme;
+        } catch (err) {
+          // Ignore (e.g. storage disabled) — falls back to the CSS media query.
+        }
+      })();
+    </script>
+
+    <Analytics />
   </head>
   <body>
-    <header>
-      <a href="/">Because Developers are Awesome</a>
-      <nav>
-        <a href="/posts/">Posts</a>
-        <a href="/tags/">Tags</a>
-        <a href="/categories/">Categories</a>
-      </nav>
-    </header>
-    <main>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+
+    <SiteHeader />
+
+    <main class="shell-main" id="main-content">
       <slot />
     </main>
+
+    <SiteFooter />
+
+    <script>
+      // Mermaid diagrams (`<Mermaid>` -> `<pre class="mermaid">`, see
+      // src/components/Mermaid.astro) are rare (3 posts) so the ~600KB
+      // mermaid package is only fetched on pages that actually contain one,
+      // via a dynamic import. Re-renders on `bda:themechange` so diagrams
+      // match the page's light/dark state, restoring each block's original
+      // source text first since `mermaid.run()` replaces it with an <svg>.
+      async function renderMermaid() {
+        const blocks = document.querySelectorAll<HTMLElement>('pre.mermaid');
+        if (blocks.length === 0) return;
+
+        const { default: mermaid } = await import('mermaid');
+        const theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'default';
+        mermaid.initialize({ startOnLoad: false, theme, securityLevel: 'strict' });
+
+        for (const block of blocks) {
+          if (!block.dataset.mermaidSource) {
+            block.dataset.mermaidSource = block.textContent ?? '';
+          }
+          block.removeAttribute('data-processed');
+          block.textContent = block.dataset.mermaidSource ?? '';
+        }
+
+        try {
+          await mermaid.run({ nodes: Array.from(blocks) });
+        } catch (err) {
+          console.error('Mermaid render failed:', err);
+        }
+      }
+
+      renderMermaid();
+      document.addEventListener('bda:themechange', renderMermaid);
+    </script>
   </body>
 </html>

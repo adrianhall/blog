@@ -55,17 +55,11 @@ assertFile('feed/by_tag/react_native.xml'); // RAW tag name in feed filename
 // --- Pagefind search index --------------------------------------------------
 assertFile('pagefind/pagefind.js');
 
-// --- Milestone 3 review-gate pages (temporary; deleted once M4 begins) ------
-// Not part of the permanent URL contract (excluded from sitemap.xml, which is
-// hand-built from a fixed URL list — see src/pages/sitemap.xml.ts), but
-// asserted here so a broken design-preview build doesn't slip through.
-assertDir('design-preview'); // comparison landing
-assertDir('design-preview/a'); // Direction A — home list
-assertFile('design-preview/a/post.html'); // Direction A — sample post
-assertDir('design-preview/b'); // Direction B — home list
-assertFile('design-preview/b/post.html'); // Direction B — sample post
-assertDir('design-preview/c'); // Direction C — home list (blend of A + B)
-assertFile('design-preview/c/post.html'); // Direction C — sample post
+// --- Milestone 4: real theme (Direction C) ----------------------------------
+// The Milestone 3 design-preview comparison pages (`design-preview/{a,b,c}`)
+// were deleted once Direction C was picked and built for real — see
+// MIGRATION_PLAN.md § M3 "Deferred to M4" / § M4 implementation notes.
+assertFile('404.html'); // custom 404 (wrangler.jsonc: not_found_handling)
 
 if (failures.length > 0) {
   console.error('\u2717 M1 build assertions FAILED:\n' + failures.map((f) => `  - ${f}`).join('\n'));

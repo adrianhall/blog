@@ -3,8 +3,9 @@
 // so under `build.format: "preserve"` each page is emitted as a literal
 // `.html` file: `/posts/<id>.html` — preserving the exact legacy Jekyll URLs.
 import { getCollection, render } from 'astro:content';
-import Base from '../../layouts/Base.astro';
-import { getPostDate } from '../../utils/posts';
+import PostLayout from '../../layouts/PostLayout.astro';
+import { getPostDate, getPostUrl } from '../../utils/posts';
+import { excerptOf, readingTimeMinutes } from '../../utils/content';
 import type { Post } from '../../utils/posts';
 
 export async function getStaticPaths() {
@@ -21,14 +22,21 @@ interface Props {
   post: Post;
 }
 const { post } = Astro.props;
-const { Content } = await render(post);
+const { Content, headings } = await render(post);
 const date = getPostDate(post);
+const minutes = readingTimeMinutes(post.body);
+const description = excerptOf(post.body, 160);
 ---
 
-<Base title={post.data.title}>
-  <article>
-    <h1>{post.data.title}</h1>
-    <time datetime={date.toISOString()}>{date.toISOString().slice(0, 10)}</time>
-    <Content />
-  </article>
-</Base>
+<PostLayout
+  title={post.data.title}
+  description={description}
+  path={getPostUrl(post)}
+  date={date}
+  minutes={minutes}
+  categories={post.data.categories}
+  tags={post.data.tags}
+  headings={headings}
+>
+  <Content />
+</PostLayout>

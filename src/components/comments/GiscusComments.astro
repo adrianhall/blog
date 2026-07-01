@@ -1,0 +1,70 @@
+---
+// Giscus (https://giscus.app) provider implementation for the pluggable
+// `<Comments>` component (see `../Comments.astro`). Backed by the new repo's
+// GitHub Discussions per MIGRATION_PLAN.md handoff fact #3 (Discussions
+// enabled, "Comments" category created).
+//
+// Giscus ships as a `<script>` tag that Giscus's own client renders into an
+// iframe, rather than an npm package — there is nothing to `import`. The
+// script is inserted client-side (not written directly here) so we can pick
+// its initial `data-theme` from whatever theme is already active on the page
+// (set by the pre-paint script in Base.astro) instead of hard-coding
+// "light". A `bda:themechange` listener (dispatched by ThemeToggle.astro)
+// keeps the embedded iframe in sync via `postMessage` if the visitor toggles
+// theme after the widget has loaded.
+import { GISCUS_CONFIG } from '../../config/giscus';
+
+interface Props {
+  /** Optional explicit discussion term. Defaults to the current page's
+   *  pathname (matches `mapping: "pathname"` in GISCUS_CONFIG). */
+  term?: string;
+}
+const { term } = Astro.props;
+const pathname = term ?? Astro.url.pathname;
+---
+
+<div
+  class="giscus"
+  data-giscus-repo={GISCUS_CONFIG.repo}
+  data-giscus-repo-id={GISCUS_CONFIG.repoId}
+  data-giscus-category={GISCUS_CONFIG.category}
+  data-giscus-category-id={GISCUS_CONFIG.categoryId}
+  data-giscus-mapping={GISCUS_CONFIG.mapping}
+  data-giscus-term={pathname}
+>
+</div>
+
+<script>
+  function giscusTheme(): 'light' | 'dark' {
+    return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+  }
+
+  const container = document.querySelector<HTMLElement>('.giscus[data-giscus-repo]');
+  if (container) {
+    const script = document.createElement('script');
+    script.src = 'https://giscus.app/client.js';
+    script.async = true;
+    script.crossOrigin = 'anonymous';
+    script.setAttribute('data-repo', container.dataset.giscusRepo ?? '');
+    script.setAttribute('data-repo-id', container.dataset.giscusRepoId ?? '');
+    script.setAttribute('data-category', container.dataset.giscusCategory ?? '');
+    script.setAttribute('data-category-id', container.dataset.giscusCategoryId ?? '');
+    script.setAttribute('data-mapping', container.dataset.giscusMapping ?? 'pathname');
+    script.setAttribute('data-term', container.dataset.giscusTerm ?? '');
+    script.setAttribute('data-strict', '0');
+    script.setAttribute('data-reactions-enabled', '1');
+    script.setAttribute('data-emit-metadata', '0');
+    script.setAttribute('data-input-position', 'top');
+    script.setAttribute('data-theme', giscusTheme());
+    script.setAttribute('data-lang', 'en');
+    container.appendChild(script);
+
+    document.addEventListener('bda:themechange', () => {
+      const iframe = container.querySelector<HTMLIFrameElement>('iframe.giscus-frame');
+      iframe?.contentWindow?.postMessage(
+        { giscus: { setConfig: { theme: giscusTheme() } } },
+        'https://giscus.app',
+      );
+    });
+  }
+</script>

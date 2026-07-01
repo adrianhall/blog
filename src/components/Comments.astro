@@ -1,0 +1,20 @@
+---
+// Pluggable comments component (MIGRATION_PLAN.md § "Locked decisions" and
+// § M4: "pluggable `<Comments>` component; first provider Giscus"). Post
+// pages import this component, not a specific provider, so swapping Giscus
+// out later (or supporting several at once) means adding a case here and a
+// new file under `./comments/`, not touching every call site.
+import GiscusComments from './comments/GiscusComments.astro';
+
+interface Props {
+  provider?: 'giscus';
+  /** Forwarded to the provider as the discussion-mapping term. */
+  term?: string;
+}
+const { provider = 'giscus', term } = Astro.props;
+---
+
+<section class="comments" aria-label="Comments">
+  <h2>Comments</h2>
+  {provider === 'giscus' && <GiscusComments term={term} />}
+</section>

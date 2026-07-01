@@ -1,0 +1,50 @@
+---
+// Light/dark toggle. The pre-paint theme script that avoids a flash of the
+// wrong theme lives in `Base.astro`'s `<head>` (it must run before first
+// paint); this component only owns the button and its click handler.
+//
+// On toggle it also dispatches a `bda:themechange` CustomEvent on
+// `document` (detail: { theme }) so other components that need to react to
+// theme changes at runtime — the Mermaid renderer and the Giscus embed, both
+// wired up in Base.astro / Comments.astro — don't need to duplicate the
+// toggle logic themselves.
+---
+
+<button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">
+  <svg class="icon icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="4"></circle>
+    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+  </svg>
+  <svg class="icon icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"></path>
+  </svg>
+</button>
+
+<script>
+  const STORAGE_KEY = 'bda-theme';
+  const button = document.getElementById('theme-toggle');
+
+  function currentTheme(): 'light' | 'dark' {
+    return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+  }
+
+  function syncLabel() {
+    const theme = currentTheme();
+    button?.setAttribute('aria-label', theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
+    button?.setAttribute('aria-pressed', String(theme === 'dark'));
+  }
+
+  button?.addEventListener('click', () => {
+    const next = currentTheme() === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    try {
+      localStorage.setItem(STORAGE_KEY, next);
+    } catch {
+      // Ignore (e.g. storage disabled) — the toggle still works for this load.
+    }
+    syncLabel();
+    document.dispatchEvent(new CustomEvent('bda:themechange', { detail: { theme: next } }));
+  });
+
+  syncLabel();
+</script>

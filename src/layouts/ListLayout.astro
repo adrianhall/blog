@@ -1,0 +1,38 @@
+---
+// Shared layout for every post-list page: home (`/`, `/page/N/`), the posts
+// index (`/posts/`, `/posts/page/N/`), and the per-tag/per-category archives
+// (`/tags/<slug>/`, `/categories/<slug>/`, `/tags/page/N/`). Built per
+// MIGRATION_PLAN.md § M4 — these pages were unstyled placeholders through M1
+// (see the M3 "Deferred to M4" note: "style the tag and category archive
+// pages, which M3 intentionally left untouched").
+import Base from './Base.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+  /** Optional intro copy under the H1 (home page, tag/category archives). */
+  lede?: string;
+  pagination?: {
+    prevHref?: string | null;
+    nextHref?: string | null;
+  };
+}
+
+const { title, description, lede, pagination } = Astro.props;
+---
+
+<Base title={title} description={description}>
+  <h1 class="page-title">{title}</h1>
+  {lede && <p class="page-lede">{lede}</p>}
+
+  <slot />
+
+  {
+    pagination && (pagination.prevHref || pagination.nextHref) && (
+      <nav class="pagination-nav" aria-label="Pagination">
+        {pagination.prevHref ? <a rel="prev" href={pagination.prevHref}>← Newer posts</a> : <span class="pagination-spacer" />}
+        {pagination.nextHref ? <a rel="next" href={pagination.nextHref}>Older posts →</a> : <span class="pagination-spacer" />}
+      </nav>
+    )
+  }
+</Base>

@@ -1,0 +1,81 @@
+---
+// Post layout: byline (date + reading time), tags, a widescreen article grid
+// with a sticky table-of-contents rail on wide screens, share buttons, and
+// the pluggable `<Comments>` component (Giscus). Built per
+// MIGRATION_PLAN.md § M4; the article-grid/rail shell itself is promoted
+// from the Milestone 3 Direction C preview (`src/pages/design-preview/c/post.astro`),
+// but the rail now holds a real `<TableOfContents>` instead of just post meta
+// (see the M3 "Deferred to M4" note), and the article gains `<ShareButtons>`
+// + `<Comments>` below the prose, neither of which existed in the preview.
+import type { MarkdownHeading } from '@astrojs/markdown-remark';
+import Base from './Base.astro';
+import TableOfContents from '../components/TableOfContents.astro';
+import ShareButtons from '../components/ShareButtons.astro';
+import Comments from '../components/Comments.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+  /** The post's canonical served path, e.g.
+   *  `/posts/2024/2024-09-03-aspnetcore-options.html` (see the `canonicalPath`
+   *  note on `Base.astro` for why this can't be derived from `Astro.url`). */
+  path: string;
+  date: Date;
+  minutes: number;
+  categories: string[];
+  tags: string[];
+  headings: MarkdownHeading[];
+}
+
+const { title, description, path, date, minutes, categories, tags, headings } = Astro.props;
+
+const canonicalUrl = new URL(path, Astro.site).toString();
+---
+
+<Base title={title} description={description} type="article" canonicalPath={path}>
+  <div class="article-grid">
+    <article class="prose">
+      <h1 class="page-title">{title}</h1>
+      <p class="post-meta">
+        <time datetime={date.toISOString()}>
+          {date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+        </time>
+        <span aria-hidden="true">·</span>
+        <span>{minutes} min read</span>
+      </p>
+      {
+        tags.length > 0 && (
+          <ul class="tag-list">
+            {tags.map((tag) => (
+              <li class="tag-pill">{tag}</li>
+            ))}
+          </ul>
+        )
+      }
+
+      <slot />
+
+      <ShareButtons url={canonicalUrl} title={title} />
+      <Comments term={path} />
+    </article>
+
+    <aside class="article-rail">
+      <TableOfContents headings={headings} />
+      <h2>About this post</h2>
+      <dl>
+        <dt>Published</dt>
+        <dd>{date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</dd>
+        <dt>Reading time</dt>
+        <dd>{minutes} min</dd>
+        {
+          categories.length > 0 && (
+            <>
+              <dt>Categories</dt>
+              <dd>{categories.join(', ')}</dd>
+            </>
+          )
+        }
+      </dl>
+    </aside>
+  </div>
+</Base>

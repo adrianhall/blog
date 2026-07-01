@@ -6,7 +6,7 @@
 // (page 1 — `/tags/` — is the tag cloud; pages 2+ listed posts). We reproduce
 // pages 2..N here with the same paginated post list so those indexed URLs keep
 // resolving. Page 1 is intentionally omitted (it is `/tags/`).
-import Base from '../../../../layouts/Base.astro';
+import ListLayout from '../../../../layouts/ListLayout.astro';
 import PostList from '../../../../components/PostList.astro';
 import { getSortedPosts, PER_PAGE } from '../../../../utils/posts';
 
@@ -29,9 +29,9 @@ const prevHref = num === 2 ? '/tags/' : `/tags/page/${num - 1}/`;
 const nextHref = num < totalPages ? `/tags/page/${num + 1}/` : null;
 ---
 
-<Base title={`Tags - page ${num}`}>
-  <h1>Tags — page {num} of {totalPages}</h1>
+<ListLayout
+  title={`Tags — page ${num} of ${totalPages}`}
+  pagination={{ prevHref, nextHref }}
+>
   <PostList posts={pagePosts} />
-  <a rel="prev" href={prevHref}>← Newer posts</a>
-  {nextHref && <a rel="next" href={nextHref}>Older posts →</a>}
-</Base>
+</ListLayout>

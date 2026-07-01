@@ -1,0 +1,24 @@
+---
+// Cloudflare Web Analytics — privacy-first, no cookie banner (see
+// MIGRATION_PLAN.md handoff fact #3 and § M4/M5). Replaces Microsoft Clarity,
+// which the old Jekyll site used and this migration explicitly drops.
+//
+// The site token is provisioned in M5 ("attach adrianhall.uk ... enable
+// Cloudflare Web Analytics") and supplied via the PUBLIC_CF_BEACON_TOKEN
+// build-time env var (see `.env.example`) — never hard-coded here, since this
+// repo is public. Until that token exists (local dev, PR previews, and the
+// first Cloudflare deploy before M5 runs), the beacon script is simply
+// omitted rather than shipped broken.
+const token = import.meta.env.PUBLIC_CF_BEACON_TOKEN;
+---
+
+{
+  token && (
+    <script
+      is:inline
+      defer
+      src="https://static.cloudflareinsights.com/beacon.min.js"
+      data-cf-beacon={`{"token": "${token}"}`}
+    />
+  )
+}

@@ -1,21 +1,17 @@
-// Milestone 3 (design-direction review gate) helpers ONLY.
-//
-// These are presentational conveniences for the two design-preview directions
-// (a naive excerpt + a rough reading-time estimate) so the preview pages read
-// like a real blog rather than a bare content dump. Neither concept exists in
-// the production content schema (see src/content.config.ts) or the M1/M2
-// pipeline, and neither should be promoted into it without a deliberate
-// decision at M4 — this file lives outside `src/utils` on purpose so it is
-// obvious it is scaffolding for the review build, safe to delete alongside
-// `src/design-preview/` and `src/pages/design-preview/` once a direction is
-// chosen and M4 begins.
+// Presentational helpers derived from a post's raw MDX body: a plain-text
+// teaser for listing pages and a rough reading-time estimate for the post
+// byline. Promoted from `src/design-preview/content-meta.ts` (Milestone 3
+// review scaffolding) into real production utilities for Milestone 4 — see
+// MIGRATION_PLAN.md § M3 implementation notes for the "should this become
+// real?" call this resolves. Neither concept is stored in front matter
+// (see `src/content.config.ts`); both are always derived at build time.
 
 const WORDS_PER_MINUTE = 200;
 
 /**
  * A rough reading-time estimate in whole minutes (minimum 1), derived from the
- * raw MDX body word count. Good enough for a design preview; not intended to
- * be precise (it does not account for code blocks reading slower, etc.).
+ * raw MDX body word count. Does not attempt to weight code blocks (readers
+ * scan, not read, code) — good enough for a byline, not a precision metric.
  */
 export function readingTimeMinutes(body: string | undefined): number {
   if (!body) return 1;
@@ -24,12 +20,11 @@ export function readingTimeMinutes(body: string | undefined): number {
 }
 
 /**
- * A naive plain-text teaser for the home-list preview cards, derived from the
- * raw MDX body (front matter already stripped by the content loader). Strips
- * MDX import statements, component tags, fenced code blocks, and common
+ * A naive plain-text teaser for post-list cards, derived from the raw MDX
+ * body (front matter already stripped by the content loader). Strips MDX
+ * import statements, component tags, fenced code blocks, and common
  * Markdown syntax, then truncates to `maxLength` characters at a word
- * boundary. This is intentionally simple — it only needs to look plausible
- * next to real post titles/dates, not be publication-quality copy.
+ * boundary.
  */
 export function excerptOf(body: string | undefined, maxLength = 180): string {
   if (!body) return '';

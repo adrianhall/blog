@@ -1,6 +1,6 @@
 ---
 // Tags landing -> `/tags/`.
-import Base from '../../layouts/Base.astro';
+import ListLayout from '../../layouts/ListLayout.astro';
 import { getSortedPosts } from '../../utils/posts';
 import { getTags } from '../../utils/taxonomy';
 
@@ -8,15 +8,16 @@ const posts = await getSortedPosts();
 const tags = getTags(posts);
 ---
 
-<Base title="Tags">
-  <h1>Tags</h1>
-  <ul>
+<ListLayout title="Tags" description="Browse every post by tag.">
+  <ul class="taxonomy-cloud">
     {
       tags.map((tag) => (
         <li>
-          <a href={`/tags/${tag.slug}/`}>{tag.name}</a> ({tag.posts.length})
+          <a href={`/tags/${tag.slug}/`}>
+            {tag.name} <span class="count">({tag.posts.length})</span>
+          </a>
         </li>
       ))
     }
   </ul>
-</Base>
+</ListLayout>

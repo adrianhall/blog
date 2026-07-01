@@ -197,9 +197,21 @@ Owner picks one (or a blend) → full theme build.
 
 ## Prerequisites (owner to complete)
 
-- [ ] Create the new GitHub repo for the Astro site (record its name in Handoff fact #2)
-- [ ] Enable **Discussions** on it + create a Giscus category (e.g. "Comments")
-- [ ] Confirm `adrianhall.uk` is on the Cloudflare account *(confirmed)*
+- [x] Create the new GitHub repo for the Astro site (record its name in Handoff fact #2)
+- [x] Enable **Discussions** on it + create a Giscus category (e.g. "Comments")
+- [x] **Install the giscus GitHub App** on the new repo:
+  <https://github.com/apps/giscus/installations/new> → select `adrianhall/blog`.
+  **Discovered during M4** — this is a *separate* step from enabling
+  Discussions/creating the category (both already done); it requires a human
+  clicking through GitHub's App-installation UI and can't be done via
+  `gh`/the REST or GraphQL API with a personal token. Confirmed done and
+  working (post-M4): `curl https://giscus.app/api/discussions?repo=adrianhall%2Fblog&category=Comments&term=...`
+  now returns `{"error":"Discussion not found"}` (the expected response for a
+  term with no comments yet — a discussion is created lazily on first
+  submission) instead of the earlier `"giscus is not installed..."` error,
+  and a Playwright re-check on a live post page shows the real widget
+  (reactions, comment box, "Sign in with GitHub") with no console errors.
+- [x] Confirm `adrianhall.uk` is on the Cloudflare account *(confirmed)*
 - [ ] Add CI secrets later: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`
 
 ## Milestone checklist
@@ -207,7 +219,7 @@ Owner picks one (or a blend) → full theme build.
 - [x] M1 — Scaffold Astro (collections, schema, Expressive Code, RSS, sitemap, Pagefind, URL routing)
 - [x] M2 — Content conversion script + verification report
 - [x] M3 — Two design directions (review gate) — **Direction C chosen**
-- [ ] M4 — Build Direction C as the real theme (layouts, pluggable comments/Giscus, share, analytics)
+- [x] M4 — Build Direction C as the real theme (layouts, pluggable comments/Giscus, share, analytics)
 - [ ] M5 — Deploy to Cloudflare + domain + cutover/redirect
 
 ## Open confirmations for the new session
@@ -229,6 +241,8 @@ Owner picks one (or a blend) → full theme build.
   - Note: source mistakes (highlight language, bad links) propagate
 - **M3**: Claude Sonnet 5 (default),  $25.75, 550K context
   - Built a third design option, plus iterate on design C once.
+- **M4**: Claude Sonnet 5 (default), $20.00, 534K context
+  - Bug: AddToAny was not implemented properly, so that was added
 
 ## M1 implementation notes (for M2 onward)
 
@@ -447,3 +461,208 @@ Two more rounds of owner feedback on C specifically, both fixed in
   paragraphs run well past the ~90ch typically recommended for prose
   readability — an accepted, deliberate choice for this direction's "let code
   blocks and wide content breathe" goal, not an oversight.
+
+## M4 implementation notes (for M5 onward)
+
+Direction C promoted from a review build into the real theme. Every item on
+the M3 "Deferred to M4" list is done; the design is otherwise unchanged from
+`design-c.css` (no new visual review gate — this was implementation, not a
+design decision point).
+
+- **`src/design-preview/` and `src/pages/design-preview/` are gone**
+  (`rm -rf`, both A and B included). `npm run build` dropped from **254 to
+  248 pages** — the six deleted comparison routes.
+- **`src/styles/global.css`** is `design-c.css` promoted verbatim for the
+  token block and every existing component rule, minus the
+  Milestone-3-only `.review-banner`/switcher CSS, plus new production
+  component rules: pagination nav, a real nested table-of-contents list,
+  share buttons, the `/tags/` + `/categories/` tag-cloud landings, the
+  comments-section divider, and a small 404 treatment. `--measure`,
+  `--shell-max`, and every color/space/shape token are byte-for-byte what
+  Addendum 2 landed on.
+- **New layouts**, replacing the M1 placeholder `Base.astro`:
+  - `src/layouts/Base.astro` — head/SEO (canonical, OpenGraph, Twitter card,
+    RSS+JSON-feed `<link rel=alternate>`), `<SiteHeader>`/`<SiteFooter>`,
+    `<Analytics>`, the pre-paint theme script, and the Mermaid loader script.
+  - `src/layouts/PostLayout.astro` — byline (date + reading time), tags, the
+    `.article-grid` with a real `<TableOfContents>` in the sticky rail
+    (replacing the M3 preview's meta-only rail), `<ShareButtons>`, and
+    `<Comments>`.
+  - `src/layouts/ListLayout.astro` — shared by home, `/posts/`, and every
+    tag/category archive page (title, optional lede, pagination nav). This
+    is what finally styles the tag/category archives, which M1–M3 left as
+    bare unstyled lists.
+- **New components**: `SiteHeader`, `SiteFooter`, `ThemeToggle` (toggle logic
+  extracted from the old `PreviewChrome`, now dispatching a `bda:themechange`
+  `CustomEvent` other components listen for), `Analytics`,
+  `TableOfContents` (built from the `headings` array `astro:content`'s
+  `render()` already returns — no new remark/rehype plugin needed; h2 groups
+  h3 children into a nested list), `ShareButtons` (dependency-free: Web
+  Share API where supported, direct X/LinkedIn intent links, Clipboard-API
+  copy-link with an `execCommand` fallback — no AddToAny script, consistent
+  with dropping Clarity/Disqus elsewhere in this migration), and the
+  pluggable `Comments` (`src/components/Comments.astro` dispatches on a
+  `provider` prop, currently just `"giscus"` →
+  `src/components/comments/GiscusComments.astro`; adding a second provider
+  later means a new file under `comments/` plus one more `if`, not touching
+  call sites).
+- **`src/utils/content.ts`** promotes `excerptOf`/`readingTimeMinutes` from
+  the M3-only `src/design-preview/content-meta.ts` into a real utility (the
+  "should this become real?" call the M3 notes flagged) — used for post-list
+  excerpts, the post byline, and each post's meta-description. Front matter
+  still has no `excerpt` field; both stay derived at build time.
+- **`PostList.astro`** is the M3 preview's `design-preview/c/index.astro`
+  markup promoted into the real component: every title now links to its real
+  post (the preview only linked its one showcase post, since no other styled
+  post page existed yet).
+- **Giscus wiring**: `src/config/giscus.ts` holds the real `repo`/`repoId`/
+  `category`/`categoryId` — looked up once via
+  `gh api graphql -f query='{ repository(owner:"adrianhall", name:"blog") { id discussionCategories(first:20){nodes{id name slug}}}}'`
+  rather than invented (these aren't secrets; Giscus reads them client-side
+  regardless). **Found during verification, not anticipated in M3**: Giscus
+  also requires its GitHub App to be installed on the repo — a separate step
+  from enabling Discussions/creating the category, which were already done.
+  Confirmed live: `curl https://giscus.app/api/discussions?repo=adrianhall%2Fblog&category=Comments&term=...`
+  → `{"error":"giscus is not installed on this repository"}`, and the same
+   error surfaced in-browser during the Playwright pass below. Added as a new
+   checkbox under "Prerequisites" — it needs a human in GitHub's UI
+   (<https://github.com/apps/giscus/installations/new>), not scriptable with a
+   personal-access-token `gh` session. Comments rendered an empty (but styled)
+   section until that was done. **Resolved same day**: owner installed the
+   app; re-running the same `curl` now returns
+   `{"error":"Discussion not found"}` (expected — discussions are created
+   lazily on first comment/reaction), and a follow-up Playwright check shows
+   the real widget (reactions, comment box, "Sign in with GitHub", zero
+   console errors) on a live post page. Checkbox flipped in "Prerequisites".
+- **Cloudflare Web Analytics**: `src/components/Analytics.astro` reads
+  `PUBLIC_CF_BEACON_TOKEN` (documented in `.env.example`) and renders nothing
+  when it's unset, rather than shipping a beacon `<script>` pointed at no
+  token. The token itself is an M5 task (handoff fact #3 / M5 step 2); M4
+  only builds the slot.
+- **Mermaid** (`pre.mermaid` from `src/components/Mermaid.astro`, still just
+  a bare element per the M2 notes) now actually renders: `mermaid` was added
+  as a dependency, and `Base.astro`'s loader script dynamically `import()`s
+  it only on pages that contain a `pre.mermaid` element (3 posts) so the
+  ~600KB package is never fetched elsewhere. Re-renders on `bda:themechange`
+  — each block's original diagram source is cached in a `data-mermaid-source`
+  attribute before the first render (since `mermaid.run()` replaces the
+  element's contents with an `<svg>`, destroying the source text), so
+  toggling theme re-runs Mermaid with `theme: 'dark' | 'default'` against the
+  restored source instead of double-rendering an already-converted SVG.
+- **Gotcha (fixed): canonical/OpenGraph URLs were wrong for every file-style
+  route.** `build.format: "preserve"` serves posts, `/privacy.html`, and the
+  new `/404.html` as literal `.html` files, but `Astro.url.pathname` reflects
+  Astro's *routing* model, not the on-disk output — for those routes it
+  normalises away the extension into a trailing slash (e.g.
+  `/posts/2024/2024-09-03-aspnetcore-options/`), which is simply the wrong
+  canonical URL. Directory-style routes (home, `/posts/`, tag/category
+  archives) don't have this problem — their `Astro.url.pathname` already
+  matches the served `.../index.html` URL. Fixed with an explicit
+  `canonicalPath` prop on `Base.astro` that overrides `Astro.url.pathname`
+  when given; `PostLayout` requires a `path` prop (threaded from
+  `getPostUrl(post)` in `posts/[...slug].astro`) and uses it for the
+  canonical tag *and* for `ShareButtons`/`Comments`' term, and
+  `privacy.astro`/`404.astro` pass their path literally. **Any future
+  file-style route needs the same treatment** — this is not something Astro
+  can infer from `build.format` alone.
+- **404 page**: `src/pages/404.astro` (Base + `noindex` robots meta) needed a
+  `wrangler.jsonc` change to actually be served —
+  `assets.not_found_handling` defaults to `"none"`, so it was set to
+  `"404-page"` (confirmed via Cloudflare's Workers Static Assets docs; the
+  old GitHub Pages host did this automatically, Workers requires it
+  explicit).
+- **`scripts/assert-build.mjs`**: removed the six M3 design-preview
+  assertions (their routes no longer exist), added one for `dist/404.html`.
+  `scripts/verify-urls.mjs` was not touched — it already only *allows* extra
+  URLs rather than hard-coding the design-preview ones, so `/404.html`
+  and the earlier-added `/categories/` just show up as (expected) allowed
+  extras.
+- **Not implemented / explicitly out of M4 scope:**
+  - **Pagefind has no search UI.** The build-time index at `/pagefind/`
+    still exists (M1), but no page queries it — M4's brief was "layouts,
+    pluggable comments/Giscus, share, analytics" per the milestone
+    checklist, and search wasn't in it. Wiring a `<PagefindSearch>` UI is a
+    reasonable near-term follow-up but is a new decision, not something this
+    milestone silently dropped.
+  - **No favicon.** The old Jekyll site never had one either (checked
+    source: no `favicon.ico`/`apple-touch-icon` anywhere); not a regression,
+    but worth a deliberate decision before M5's public cutover.
+  - Live Giscus theme-sync and Mermaid re-render were both *implemented*
+    (see above) even though only "wire the toggle into the real header" was
+    strictly required by the M3 note — worth knowing they're new surface
+    area, not carried over from the preview.
+- **Verification:** `npm run build` (248 pages), `npm run assert`, and
+  `npm run check` (`astro check` clean + the URL-contract diff, still 0
+  missing) all pass. Visually verified with a scripted Playwright pass
+  (1600px desktop light+dark, 390px mobile) across the home page, a
+  Mermaid-diagram post, a `<Notice>`/`<Figure>`-bearing post, and `/tags/` —
+  confirmed the theme toggle flips both the page chrome and Mermaid/Expressive
+  Code theming together, the TOC nests h3s under their h2, and (at the time)
+  the only console errors captured were the Giscus "not installed" ones
+  above — which is how the missing-GitHub-App-install prerequisite was
+  actually discovered, not anticipated up front. Re-verified after the owner
+  installed the app: the same pass now shows zero console errors and a fully
+  working Giscus widget (see the Giscus-wiring note above).
+
+### Post-M4 fixes (found during owner review)
+
+- **Tag-pill misalignment on post pages.** `.prose li + li { margin-top:
+  var(--space-2); }` (real MDX list rhythm) is a descendant selector, so it
+  also matched `<li class="tag-pill">` inside `PostLayout`'s tag list —
+  the only place a `.tag-list` lives inside `.prose` (`PostList`'s copies sit
+  in `.post-card__body`, unaffected). Every tag past the first got an
+  unwanted 8px top offset, breaking the flex-row alignment. Fixed with a
+  `.tag-list li + li { margin-top: 0; }` override in
+  `src/styles/global.css`; `.tag-list`'s own `gap` already handles spacing.
+- **Share buttons didn't match the old site, and LinkedIn looked broken.**
+  The original M4 `ShareButtons.astro` shipped a *generic* set (native
+  share, X, LinkedIn, copy link) instead of checking what the old site
+  actually used. Fixed by reading the real config
+  (`_includes/social-share.html` in the source repo, an AddToAny widget) and
+  matching it exactly: **copy link, email, Bluesky, Facebook, LinkedIn,
+  Mastodon, Reddit, Threads** — X was never in the old list and stays out.
+  One old-list member was dropped after investigation: **Slashdot**'s own
+  bookmark/share feature has been dead since 2018 (independently confirmed,
+  then reproduced live: `curl https://slashdot.org/bookmark.pl?...` returns
+  "New bookmark creation is no longer supported") — the owner chose to drop
+  it rather than link to a permanently broken feature on Slashdot's own
+  site. The reported "broken" LinkedIn link was not actually a bug: LinkedIn
+  populates the shared card by crawling the URL's OpenGraph tags, which
+  can't happen against `localhost`; it renders correctly once the URL is
+  publicly reachable (confirmed the URL format itself matches LinkedIn's
+  documented `sharing/share-offsite/?url=` endpoint). Brand icons are the
+  CC0-licensed Simple Icons paths (Bluesky/Facebook/Mastodon/Reddit/Threads);
+  email reuses a Lucide-style outline icon to match the component's existing
+  native-share/copy-link icons. Mastodon has no single domain (federated), so
+  its button prompts once for the visitor's instance, remembers it in
+  `localStorage` (`bda-mastodon-instance`), and opens
+  `https://<instance>/share?text=...` — verified live against
+  `mastodon.social` (redirects to sign-in when logged out, which is the
+  documented/expected behaviour) and confirmed the prompt is skipped on
+  subsequent clicks.
+- **Mastodon share icon rendered white instead of matching the other brand
+  icons.** A third instance of the *exact same* bug class as the tag-pill
+  fix above: `.prose a { color: var(--color-accent); }` is a descendant
+  selector, and most of the new share icons (email, Bluesky, Facebook,
+  LinkedIn, Reddit, Threads) are `<a>` tags living inside `.prose` (the
+  `.share` row sits inside `<article class="prose">` on the post page), so
+  that rule permanently overrode them to accent-blue instead of the intended
+  neutral-by-default / accent-on-hover treatment. The three `<button>`-based
+  icons (native share, copy link, Mastodon) aren't `<a>` tags, so `.prose a`
+  never touched them and they correctly stayed neutral (`--color-fg`) — which
+  is what made Mastodon look like the odd one out, since in dark mode
+  `--color-fg` (`#e6edf3`) reads as near-white next to the other icons'
+  accent blue (`#58a6ff`). Every icon had the same latent bug; Mastodon just
+  wasn't affected by it, which made the *intended* neutral state look wrong
+  by comparison to the *accidental* blue state everything else had. Fixed by
+  scoping the button styling to `.share > .share__link` (specificity now
+  beats `.prose a`), confirmed via computed-style checks in both themes:
+  all nine icons now resolve to the same `color` at rest, in both light and
+  dark. **Lesson for future components nested inside `.prose`**: any broad
+  `.prose <selector>` rule (list items, links, etc.) needs to be checked
+  against every component that might render inside the prose column, not
+  just body-text content — this is now the third time (tag-pill margin,
+  and this) the same generic-descendant-selector pattern has bled into a
+  component. If a fourth turns up, scoping `.prose` rules to `.prose > *`
+  or a dedicated `:where(...)` exclusion list may be worth doing proactively
+  instead of patching one component at a time.

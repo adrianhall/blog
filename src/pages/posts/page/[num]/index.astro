@@ -1,6 +1,6 @@
 ---
 // Posts-listing pagination 2..N -> `/posts/page/<num>/`. Page 1 is `/posts/`.
-import Base from '../../../../layouts/Base.astro';
+import ListLayout from '../../../../layouts/ListLayout.astro';
 import PostList from '../../../../components/PostList.astro';
 import { getSortedPosts, PER_PAGE } from '../../../../utils/posts';
 
@@ -26,9 +26,9 @@ const prevHref = num === 2 ? '/posts/' : `/posts/page/${num - 1}/`;
 const nextHref = num < totalPages ? `/posts/page/${num + 1}/` : null;
 ---
 
-<Base title={`Posts - page ${num}`}>
-  <h1>Posts — page {num} of {totalPages}</h1>
+<ListLayout
+  title={`Posts — page ${num} of ${totalPages}`}
+  pagination={{ prevHref, nextHref }}
+>
   <PostList posts={pagePosts} />
-  <a rel="prev" href={prevHref}>← Newer posts</a>
-  {nextHref && <a rel="next" href={nextHref}>Older posts →</a>}
-</Base>
+</ListLayout>

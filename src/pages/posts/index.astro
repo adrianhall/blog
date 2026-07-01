@@ -1,6 +1,6 @@
 ---
 // Posts listing page 1 -> `/posts/`. Pages 2..N at `/posts/page/<num>/`.
-import Base from '../../layouts/Base.astro';
+import ListLayout from '../../layouts/ListLayout.astro';
 import PostList from '../../components/PostList.astro';
 import { getSortedPosts, PER_PAGE } from '../../utils/posts';
 
@@ -9,8 +9,10 @@ const totalPages = Math.max(1, Math.ceil(posts.length / PER_PAGE));
 const pagePosts = posts.slice(0, PER_PAGE);
 ---
 
-<Base title="Posts">
-  <h1>Posts</h1>
+<ListLayout
+  title="Posts"
+  description="All posts, newest first."
+  pagination={{ nextHref: totalPages > 1 ? '/posts/page/2/' : null }}
+>
   <PostList posts={pagePosts} />
-  {totalPages > 1 && <a rel="next" href="/posts/page/2/">Older posts →</a>}
-</Base>
+</ListLayout>

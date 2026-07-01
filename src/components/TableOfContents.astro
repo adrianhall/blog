@@ -1,0 +1,66 @@
+---
+// A real table of contents built from the headings Astro's content-collection
+// `render()` already extracts from the post's MDX (`{ depth, slug, text }`
+// per heading — the `slug` matches the `id` rendered onto the heading
+// element, so these are just anchor links). Promotes the M3 preview's
+// "On this post" meta-only rail into an actual TOC, per the M3 "Deferred to
+// M4" note ("extend the sticky rail into a real TOC").
+//
+// Only h2/h3 are shown — posts don't consistently go deeper, and a post with
+// zero headings (a handful of short ones) renders nothing rather than an
+// empty rail section.
+import type { MarkdownHeading } from '@astrojs/markdown-remark';
+
+interface Props {
+  headings: MarkdownHeading[];
+}
+const { headings } = Astro.props;
+
+interface TocEntry {
+  slug: string;
+  text: string;
+  children: TocEntry[];
+}
+
+function buildToc(items: MarkdownHeading[]): TocEntry[] {
+  const top: TocEntry[] = [];
+  let currentTop: TocEntry | null = null;
+
+  for (const heading of items) {
+    if (heading.depth <= 2) {
+      currentTop = { slug: heading.slug, text: heading.text, children: [] };
+      top.push(currentTop);
+    } else if (heading.depth === 3 && currentTop) {
+      currentTop.children.push({ slug: heading.slug, text: heading.text, children: [] });
+    }
+    // depth > 3 is intentionally ignored — see file header note.
+  }
+  return top;
+}
+
+const toc = buildToc(headings.filter((h) => h.depth >= 2 && h.depth <= 3));
+---
+
+{
+  toc.length > 0 && (
+    <nav class="toc" aria-label="Table of contents">
+      <h2>On this page</h2>
+      <ol>
+        {toc.map((entry) => (
+          <li>
+            <a href={`#${entry.slug}`}>{entry.text}</a>
+            {entry.children.length > 0 && (
+              <ol class="toc-sub">
+                {entry.children.map((child) => (
+                  <li>
+                    <a href={`#${child.slug}`}>{child.text}</a>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </li>
+        ))}
+      </ol>
+    </nav>
+  )
+}

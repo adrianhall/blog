@@ -1,6 +1,13 @@
 ---
+// Styled post-list card grid used by every listing page (home, /posts/, tag
+// and category archives). Promoted from the Milestone 3 Direction C preview
+// (`src/pages/design-preview/c/index.astro`) into the real component per
+// MIGRATION_PLAN.md § M4 — every post title now links to its real canonical
+// URL (the preview only linked its single showcase post, since no other
+// styled post page existed yet).
 import type { Post } from '../utils/posts';
 import { getPostDate, getPostUrl } from '../utils/posts';
+import { excerptOf } from '../utils/content';
 
 interface Props {
   posts: Post[];
@@ -12,10 +19,22 @@ const { posts } = Astro.props;
   {
     posts.map((post) => (
       <li>
-        <a href={getPostUrl(post)}>{post.data.title}</a>
         <time datetime={getPostDate(post).toISOString()}>
-          {getPostDate(post).toISOString().slice(0, 10)}
+          {getPostDate(post).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
         </time>
+        <div class="post-card__body">
+          <h2>
+            <a href={getPostUrl(post)}>{post.data.title}</a>
+          </h2>
+          {post.data.tags.length > 0 && (
+            <ul class="tag-list">
+              {post.data.tags.map((tag) => (
+                <li class="tag-pill">{tag}</li>
+              ))}
+            </ul>
+          )}
+          <p class="excerpt">{excerptOf(post.body)}</p>
+        </div>
       </li>
     ))
   }

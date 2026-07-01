@@ -1,7 +1,7 @@
 ---
 // Home pagination pages 2..N -> `/page/<num>/`. Page 1 is the site root (`/`),
 // so it is intentionally excluded here (matches the old Jekyll behaviour).
-import Base from '../../../layouts/Base.astro';
+import ListLayout from '../../../layouts/ListLayout.astro';
 import PostList from '../../../components/PostList.astro';
 import { getSortedPosts, PER_PAGE } from '../../../utils/posts';
 
@@ -27,9 +27,9 @@ const prevHref = num === 2 ? '/' : `/page/${num - 1}/`;
 const nextHref = num < totalPages ? `/page/${num + 1}/` : null;
 ---
 
-<Base title={`Because Developers are Awesome - page ${num}`}>
-  <h1>Posts — page {num} of {totalPages}</h1>
+<ListLayout
+  title={`Posts — page ${num} of ${totalPages}`}
+  pagination={{ prevHref, nextHref }}
+>
   <PostList posts={pagePosts} />
-  <a rel="prev" href={prevHref}>← Newer posts</a>
-  {nextHref && <a rel="next" href={nextHref}>Older posts →</a>}
-</Base>
+</ListLayout>

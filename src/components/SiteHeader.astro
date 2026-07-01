@@ -1,0 +1,19 @@
+---
+import ThemeToggle from './ThemeToggle.astro';
+
+const { pathname } = Astro.url;
+const isCurrent = (href: string) =>
+  href === '/' ? pathname === '/' : pathname.startsWith(href);
+---
+
+<header class="shell-header">
+  <div class="shell-header__inner">
+    <a class="brand" href="/">Because Developers are Awesome</a>
+    <nav class="shell-nav" aria-label="Primary">
+      <a href="/posts/" aria-current={isCurrent('/posts/') ? 'page' : undefined}>Posts</a>
+      <a href="/tags/" aria-current={isCurrent('/tags/') ? 'page' : undefined}>Tags</a>
+      <a href="/categories/" aria-current={isCurrent('/categories/') ? 'page' : undefined}>Categories</a>
+    </nav>
+    <ThemeToggle />
+  </div>
+</header>

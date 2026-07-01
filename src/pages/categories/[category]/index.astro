@@ -1,6 +1,6 @@
 ---
 // Per-category archive -> `/categories/<slug>/`.
-import Base from '../../../layouts/Base.astro';
+import ListLayout from '../../../layouts/ListLayout.astro';
 import PostList from '../../../components/PostList.astro';
 import { getSortedPosts } from '../../../utils/posts';
 import { getCategories, type TaxonomyGroup } from '../../../utils/taxonomy';
@@ -19,7 +19,6 @@ interface Props {
 const { category } = Astro.props;
 ---
 
-<Base title={`Category: ${category.name}`}>
-  <h1>Category: {category.name}</h1>
+<ListLayout title={`Category: ${category.name}`} description={`Posts in “${category.name}”.`}>
   <PostList posts={category.posts} />
-</Base>
+</ListLayout>

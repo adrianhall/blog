@@ -4,5 +4,11 @@
   // required for the static site itself.
   "name": "adrianhall-blog",
   "compatibility_date": "2025-01-01",
-  "assets": { "directory": "./dist" }
+  "assets": {
+    "directory": "./dist",
+    // `src/pages/404.astro` builds to `dist/404.html` (M4). Without this,
+    // Workers Static Assets returns a bare, unstyled 404 for any unmatched
+    // path instead of serving it — unlike GitHub Pages' automatic behaviour.
+    "not_found_handling": "404-page"
+  }
 }
