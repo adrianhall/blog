@@ -284,7 +284,7 @@ Owner picks one (or a blend) → full theme build.
   - Built a third design option, plus iterate on design C once.
 - **M4**: Claude Sonnet 5 (default), $20.00, 534K context
   - Bug: AddToAny was not implemented properly, so that was added
-- **M5**: Claude Sonnet 5 (default), including plan section
+- **M5**: Claude Sonnet 5 (default), including plan section, $12.55, 411K context
   - Bug: `html_handling` was not set properly — needed to switch to `"none"`
     and add a small Worker script (`worker/index.ts`) to reimplement
     directory-index resolution; see M5 implementation notes for the full
