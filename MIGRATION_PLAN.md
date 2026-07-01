@@ -263,6 +263,8 @@ Owner picks one (or a blend) → full theme build.
   - Built a third design option, plus iterate on design C once.
 - **M4**: Claude Sonnet 5 (default), $20.00, 534K context
   - Bug: AddToAny was not implemented properly, so that was added
+- **M5**: Claude Sonnet 5 (default), including plan section,
+  - Bug: html_handling was not set properly - needed to switch to "none" and add code
 
 ## M1 implementation notes (for M2 onward)
 

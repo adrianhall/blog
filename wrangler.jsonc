@@ -1,14 +1,21 @@
 {
-  // Cloudflare Workers Static Assets — serves the built ./dist verbatim.
-  // A tiny Worker entry can be added later for edge redirects/headers; not
-  // required for the static site itself.
   "name": "adrianhall-blog",
   "compatibility_date": "2025-01-01",
+  // M5: a tiny front Worker is now required (not just "available later") —
+  // see worker/index.ts for exactly why. `run_worker_first: true` means
+  // every request reaches it, so its `.endsWith('/')` -> `index.html`
+  // rewrite is the ONLY html-routing logic in play; `html_handling: "none"`
+  // below disables Cloudflare's own (contract-incompatible) rewriting.
+  "main": "./worker/index.ts",
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
+    "html_handling": "none",
+    "run_worker_first": true,
     // `src/pages/404.astro` builds to `dist/404.html` (M4). Without this,
     // Workers Static Assets returns a bare, unstyled 404 for any unmatched
     // path instead of serving it — unlike GitHub Pages' automatic behaviour.
+    // Still applied by the ASSETS binding itself, worker-first or not.
     "not_found_handling": "404-page"
   },
   // M5: Custom Domain for the canonical production host (matches
