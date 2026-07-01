@@ -11,6 +11,7 @@
     "build": "astro build && pagefind --site dist",
     "preview": "astro preview",
     "check": "astro check && node scripts/verify-urls.mjs",
+    "snapshot-urls": "node scripts/verify-urls.mjs --freeze",
     "convert": "node scripts/convert-content.mjs",
     "assert": "node scripts/assert-build.mjs",
     "publish": "npm run build && npm run check && wrangler deploy"

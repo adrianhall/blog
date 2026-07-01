@@ -1,4 +1,5 @@
-// Milestone 2 — URL contract verifier.
+// Milestone 2 — URL contract verifier. Milestone 5: frozen-manifest mode
+// added so this runs in CI without the old Jekyll repo checked out.
 //
 // Diffs the URL set of the OLD Jekyll build (`<source>/_site`) against the NEW
 // Astro build (`./dist`). The migration must not drop any content URL, so the
@@ -13,9 +14,24 @@
 // Asset URLs (`/assets/**`) and new-build-only infra (`/_astro/**`,
 // `/pagefind/**`) are excluded — this checks the CONTENT/route contract, not
 // theme assets (images are validated separately by the conversion copy step).
+//
+// M5: the old Jekyll source (`adrianhall.github.io`) only ever exists on the
+// machine that ran M2 — it is a different repo and is never checked out by
+// CI. So the *first* time this runs against a live `_site`, the resulting
+// expected-URL set is frozen into `scripts/legacy-urls.json` (committed).
+// Every subsequent run — local or CI — prefers that manifest when the live
+// `_site` isn't present, so the "must not regress a legacy URL" guarantee
+// holds in CI without cloning a second repo. Regenerate the manifest with
+// `npm run snapshot-urls` if the old site's build ever changes (it shouldn't
+// — it's retired content) or if `BLOG_SOURCE` is deliberately re-pointed.
 
-import { readdirSync, statSync, existsSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { readdirSync, statSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, relative, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const MANIFEST = join(__dirname, 'legacy-urls.json');
+const FREEZE = process.argv.includes('--freeze');
 
 const SRC = process.env.BLOG_SOURCE
   || '/Users/ahall/repos/adrianhall/adrianhall.github.io';
@@ -68,25 +84,58 @@ function isStalePost(url) {
   return !existsSync(`${base}.md`) && !existsSync(`${base}.mdx`);
 }
 
-function main() {
-  if (!existsSync(SITE)) {
-    console.error(`✗ Reference build not found: ${SITE}`);
-    process.exit(1);
-  }
-  if (!existsSync(DIST)) {
-    console.error(`✗ New build not found: ${DIST} (run \`npm run build\` first).`);
-    process.exit(1);
-  }
-
+/** Compute the (post-staleness-filter) expected URL set from a live `_site`. */
+function expectedFromLiveSite() {
   const expectedRaw = crawl(SITE, SITE_EXCLUDE);
-  const actual = crawl(DIST, DIST_EXCLUDE);
-
   const stale = [];
   const expected = new Set();
   for (const url of expectedRaw) {
     if (isStalePost(url)) { stale.push(url); continue; }
     expected.add(url);
   }
+  return { expected, stale };
+}
+
+function main() {
+  if (!existsSync(DIST)) {
+    console.error(`✗ New build not found: ${DIST} (run \`npm run build\` first).`);
+    process.exit(1);
+  }
+
+  const haveLiveSite = existsSync(SITE);
+
+  if (FREEZE) {
+    if (!haveLiveSite) {
+      console.error(`✗ Cannot freeze: reference build not found: ${SITE}`);
+      process.exit(1);
+    }
+    const { expected, stale } = expectedFromLiveSite();
+    const sorted = [...expected].sort();
+    writeFileSync(MANIFEST, JSON.stringify(sorted, null, 2) + '\n');
+    console.log(`✓ Froze ${sorted.length} legacy URL(s) to ${MANIFEST} (${stale.length} stale skipped).`);
+    return;
+  }
+
+  let expected;
+  let stale = [];
+  let source;
+  if (haveLiveSite) {
+    ({ expected, stale } = expectedFromLiveSite());
+    source = `live _site at ${SITE}`;
+  } else if (existsSync(MANIFEST)) {
+    expected = new Set(JSON.parse(readFileSync(MANIFEST, 'utf8')));
+    source = `frozen manifest (${MANIFEST})`;
+  } else {
+    console.error(
+      `✗ Neither the old-site reference build (${SITE}) nor a frozen manifest\n` +
+      `  (${MANIFEST}) was found. Run \`npm run snapshot-urls\` once against a\n` +
+      `  checked-out ${SRC.split('/').pop()} to create the manifest.`,
+    );
+    process.exit(1);
+  }
+
+  const actual = crawl(DIST, DIST_EXCLUDE);
+  console.log(`Comparing against: ${source}`);
 
   const missing = [...expected].filter((u) => !actual.has(u)).sort();
   const extra = [...actual].filter((u) => !expected.has(u)).sort();

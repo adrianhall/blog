@@ -10,5 +10,17 @@
     // Workers Static Assets returns a bare, unstyled 404 for any unmatched
     // path instead of serving it — unlike GitHub Pages' automatic behaviour.
     "not_found_handling": "404-page"
-  }
+  },
+  // M5: Custom Domain for the canonical production host (matches
+  // `astro.config.mjs`'s `site` and every feed/sitemap URL). `adrianhall.uk`
+  // is already an active zone on this account; `custom_domain: true` makes
+  // Cloudflare provision the DNS record + certificate automatically on the
+  // next `wrangler deploy` — no manual DNS/dashboard step needed as long as
+  // the deploying token has zone DNS + SSL/Certificates permissions.
+  "routes": [
+    {
+      "pattern": "blog.adrianhall.uk",
+      "custom_domain": true
+    }
+  ]
 }

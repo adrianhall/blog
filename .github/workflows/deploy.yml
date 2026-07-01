@@ -1,0 +1,59 @@
+name: Deploy
+
+# M5: publish the Astro site to Cloudflare Workers Static Assets on every
+# push to main, mirroring the local `npm run publish` pipeline exactly
+# (build -> verify -> deploy) so CI and manual publishing can never drift.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build, verify, and deploy
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        # PUBLIC_CF_BEACON_TOKEN must be present here, not on the deploy step:
+        # Astro/Vite inlines PUBLIC_-prefixed env vars into the built HTML at
+        # `astro build` time (src/components/Analytics.astro reads it via
+        # `import.meta.env`). `wrangler deploy` only uploads the already-built
+        # ./dist directory afterwards -- setting the var there would be a
+        # silent no-op and ship a beacon-less site.
+        run: npm run build
+        env:
+          PUBLIC_CF_BEACON_TOKEN: ${{ secrets.PUBLIC_CF_BEACON_TOKEN }}
+
+      - name: Verify (astro check + URL contract)
+        # scripts/verify-urls.mjs compares dist against the committed
+        # scripts/legacy-urls.json manifest here, since the old Jekyll repo
+        # (adrianhall.github.io) is never checked out in this workflow. See
+        # the script's header comment / `npm run snapshot-urls`.
+        run: npm run check
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy

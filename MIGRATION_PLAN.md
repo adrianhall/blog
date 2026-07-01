@@ -150,13 +150,30 @@ Owner picks one (or a blend) → full theme build.
 - **Cloudflare Web Analytics** snippet in the base layout (Clarity dropped).
 - Share component (AddToAny or native); **Giscus** wired to the new repo's Discussions.
 
-## Milestone 5 — Deploy & cut over
+## Milestone 5 — Deploy to Cloudflare
 
 1. Deploy to **Cloudflare Workers Static Assets** via Wrangler.
-2. Attach `adrianhall.uk` (custom domain / route); enable **Cloudflare Web Analytics**.
-3. Configure **Giscus** against the new repo (Discussions enabled + category).
-4. Verify: URL diff, redirect/link check, feed + sitemap + search parity.
-5. Flip `adrianhall.github.io` to **301** → `adrianhall.uk`.
+2. Attach `blog.adrianhall.uk` (custom domain / route); enable **Cloudflare Web Analytics**.
+3. Confirm **Giscus** is working against the new repo (already wired/verified in M4 — this is a smoke check, not new setup).
+4. Verify: URL diff, feed + sitemap + search parity, live Playwright pass.
+5. CI/CD: GitHub Actions workflow + repo secrets so future pushes to `main` auto-deploy.
+
+> **Split from M5:** cutting over `adrianhall.github.io` to a redirect is its
+> own milestone (see **Milestone 6** below) — it touches a second, currently
+> live production repo and is safer to do only *after* `blog.adrianhall.uk`
+> has been verified end-to-end. M5 ends once the new site is live, verified,
+> and CI can redeploy it on every push.
+
+## Milestone 6 — Cut over the old repo
+
+1. Flip `adrianhall.github.io` to a **path-preserving redirect** →
+   `blog.adrianhall.uk` (a true HTTP 301 is not possible on a bare
+   `*.github.io` host — no server config layer exists — so this is a
+   JS/meta-refresh redirect instead; see the M6 implementation notes once
+   this runs for the exact mechanism).
+2. Retire/replace the old repo's Jekyll GitHub Actions build.
+3. Verify a sample of old URLs (root, a few post `.html` paths, `/feed.xml`)
+   actually redirect to their `blog.adrianhall.uk` equivalent once live.
 
 ---
 
@@ -212,7 +229,9 @@ Owner picks one (or a blend) → full theme build.
   and a Playwright re-check on a live post page shows the real widget
   (reactions, comment box, "Sign in with GitHub") with no console errors.
 - [x] Confirm `adrianhall.uk` is on the Cloudflare account *(confirmed)*
-- [ ] Add CI secrets later: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`
+- [x] Add CI secrets later: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` *(done
+  in M5 — also added `PUBLIC_CF_BEACON_TOKEN` as a third repo secret so CI's
+  build step can inline the Web Analytics beacon; see M5 implementation notes)*
 
 ## Milestone checklist
 
@@ -220,7 +239,8 @@ Owner picks one (or a blend) → full theme build.
 - [x] M2 — Content conversion script + verification report
 - [x] M3 — Two design directions (review gate) — **Direction C chosen**
 - [x] M4 — Build Direction C as the real theme (layouts, pluggable comments/Giscus, share, analytics)
-- [ ] M5 — Deploy to Cloudflare + domain + cutover/redirect
+- [ ] M5 — Deploy to Cloudflare + domain + CI/CD
+- [ ] M6 — Cut over `adrianhall.github.io` to a redirect (split from M5)
 
 ## Open confirmations for the new session
 
@@ -425,7 +445,7 @@ design — and both felt too narrow. Rather than a third from-scratch direction,
   (`design-preview/c` + `design-preview/c/post.html`). `npm run build` now
   yields **254 pages**; `npm run check` and `astro check` are still clean.
   Re-verified visually with the same scripted Playwright pass (1600px desktop
-  + 390px mobile, light + dark) across all three directions.
+  and 390px mobile, light + dark) across all three directions.
 
 ### Addendum 2 — Direction C refinements (inline code + wider content column)
 
