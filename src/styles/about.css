@@ -247,8 +247,8 @@
  */
 .speech-bubble {
   position: absolute;
-  top: -22px;
-  left: -64px;
+  top: -116px;
+  left: -110px;
   max-width: 190px;
   background: var(--color-surface);
   border: 1.5px solid var(--color-fg);
