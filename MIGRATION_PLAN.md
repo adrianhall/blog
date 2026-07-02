@@ -261,7 +261,7 @@ Owner picks one (or a blend) → full theme build.
 - [x] M3 — Two design directions (review gate) — **Direction C chosen**
 - [x] M4 — Build Direction C as the real theme (layouts, pluggable comments/Giscus, share, analytics)
 - [x] M5 — Deploy to Cloudflare + domain + CI/CD
-- [ ] M6 — Cut over `adrianhall.github.io` to a redirect (split from M5)
+- [x] M6 — Cut over `adrianhall.github.io` to a redirect (split from M5)
 
 ## Open confirmations for the new session
 

@@ -119,7 +119,7 @@ export class KVCacheManager<T> implements CacheManager<T> {
   }
 
   async get(key: string): Promise<T | undefined> {
-    const value = await this.kv.get<T>(ey, { type: "json", cacheTtl: 60 });
+    const value = await this.kv.get<T>(key, { type: "json", cacheTtl: 60 });
     return value ?? undefined;
   }
 

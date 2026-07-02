@@ -1,0 +1,128 @@
+---
+title: "How I migrated my blog to Astro and Cloudflare Workers"
+date: 2026-07-02
+categories:
+  - Cloud Development
+tags:
+  - cloudflare
+  - ai
+  - astro
+---
+
+import Notice from '../../../components/Notice.astro';
+
+I've been doing more writing recently, which is a joy in itself.  But I noticed that my blog has become dated.  There's nothing wrong with it per-se.  It's based on [Jekyll](https://jekyllrb.com/), which is the only Ruby based system I use, and I had long ago switched over to using [Dev Containers](https://containers.dev/) to do writing.  The Google Analytics and Microsoft Clarity plugins needed to be updated and [Minimal Mistakes], the theme I use, had been basically abandoned.  [Discus](https://disqus.com/) was my favored comment provider, but it had friction for my audience because it needed a separate sign-up.  I'm also not using it for all the other things it does well.
+
+In short, I needed to make a change.
+
+![Migrating my blog](/assets/images/2026/Jul02-banner.png)
+
+I'm also really keen to use my new domain name (`adrianhall.uk`), which is hosted on Cloudflare.  I'm also thinking about the [Cloudflare Dev Platform](https://www.cloudflare.com/developer-platform/) a lot and how I can leverage that.  Finally, Anthropic [just released Claude Sonnet 5](https://www.anthropic.com/news/claude-sonnet-5), and I was eager to give it a meaty problem to chew on.
+
+<Notice type="info">
+
+I am running my OpenCode setup through [Cloudflare AI Gateway](https://www.cloudflare.com/products/ai-gateway/) and that gives me a cost breakdown for my OpenCode sessions. I've included this information at the bottom of each milestone so you can see what I spent my money on.  Both Claude Opus 4.8 and Claude Sonnet 5 have a maximum context window of 1M tokens.
+
+</Notice>
+
+My one rule for this: **don't write any code**.  Everything should be done by an LLM so that a fair review can be made.
+
+So, let's get into the details on how I migrated my blog.
+
+## M0: Planning
+
+The first milestone is always planning.  I have a [custom OpenCode setup](https://github.com/adrianhall/opencode-setup), which has a spec writing agent that I use for planning.  The plan - give it access to my existing source code, tell it what's wrong, and then tell it to prioritize Cloudflare products and give me options to work on the plan, then write the  plan in Markdown as a set of milestones that build on one another but are independently verifiable.
+
+I honestly thought that, given the constraints, it was going to suggest EmDash.  Instead, it suggested [Astro](https://astro.build/) as the basis of my blog, with options for [Hugo](https://gohugo.io/), [Eleventy](https://www.11ty.dev/), and just upgrading the design of my Jekyll blog.
+
+In the end, it wrote the first version of the [MIGRATION_PLAN.md](https://github.com/adrianhall/blog/blob/4727c645a309c114dc80911375ca043b80bff97c/MIGRATION_PLAN.md), covering five milestones - scaffolding, conversion, design discovery, building the theme, and then deployment (which includes CI/CD).  There were some decisions made here: old vs. new
+
+| Component   | OLD          | NEW                      |
+|-------------|--------------|--------------------------|
+| Framework   | Jekyll       | Astro                    |
+| Search      | Lunr         | PageFind                 |
+| Comments    | Discus       | Giscus                   |
+| Format      | Kramdown     | MDX                      |
+| Code Blocks | Rouge        | Expressive Code          |
+| Hosting     | Github Pages | Cloudflare Workers       |
+| Analytics   | MS Clarify   | Cloudflare Web Analytics |
+
+Vital stats:
+
+* Model: Claude Opus 4.8 (default thinking)
+* Cost: $8.10
+* Context size: 273K tokens
+
+## M1: Scaffolding
+
+At this point, I switched over to Claude Sonnet 5 for the bulk of the work.  I created [a new repo](https://github.com/adrianhall/blog), copied the migration plan into the new repo (so it's a fresh start), and asked OpenCode to implement M1.  There was no planning here - just switch to build mode and let it go.
+
+In this milestone, there was nothing really to complain about.  We made some decisions around how to handle the missing tags and categories pages, and I asked the LLM to produce 5-6 pages that show off the various features within the page (like notices and code blocks).  The scaffolding was done, tests were run, and I looked at the pages manually.
+
+Vital stats:
+
+* Model: Claude Sonnet 5 (default thinking)
+* Cost: $8.38
+* Context size: 321K tokens
+
+## M2: Data Conversion
+
+Here is where the fun started.  As with M1, I started in build mode and told OpenCode to build M2.  There were 139 posts over a decade that needed to be converted from markdown (with Jekyll front matter and quirks) to MDX.  Claude Sonnet 5 wrote the script, found the outliers, adjusted the script, and then added semantic components for notices, figures, and mermaid charts.
+
+Along the way, it found a few errors I had made in the source.  Rather than get Claude Sonnet 5 to fix them in its script, I opted to fix the source.  A couple of images were broken and I had made a couple of spelling mistakes in languages for code blocks.  Both of these "broke" the conversion.
+
+This step was a real time saver.  I would have gone the scripted approach as well, but I'd likely have spent a day on writing the script and debugging.  The process was over in about 15 minutes.
+
+Vital stats:
+
+* Model: Claude Sonnet 5 (default thinking)
+* Cost: $13.99
+* Context size: 429K tokens
+
+## M3: Design choices
+
+Then I moved onto what was going to be the most expensive part of the process.  It was also the part that I figured I would be spending the money on anyway because I am not a designer and do not write "good CSS".  The plan called for the production of two design choices - a restrained editorial design with serif fonts, produced with a brown hue, and a technical design with crisp sans fonts, prominent code styling, and stronger accents.  The LLM produced the home page and a typical post page in HTML and CSS for me to compare.
+
+In the end, I liked bits about both designs, so I asked the LLM to produce a third design incorporating the bits I liked.  I also iterated on this design a bit - widening the max width to allow for better code blocks and fixing the inline code styling so it followed the theme switcher.
+
+All three designs used a theme switcher, so light and dark modes were available and followed the system preference.  All three designs included code blocks, mermaid charts, images, and notices or callouts as well.  This allowed quick iteration based on visual details.
+
+Vital stats:
+
+* Model: Claude Sonnet 5 (default thinking)
+* Cost: $25.99
+* Context size: 550K tokens
+
+## M4: Implementing the design choice
+
+The fourth milestone covered actually writing the Astro template.  Again - not much to deal with here.  However, we had to iterate quite a few times for niggling problems.  The tags at the top of the page didn't line up, AddToAny (which handles the "post this article" functionality at the bottom of the page) was not implemented, and there were several small glitches that needed a visual fix.
+
+Of the entire time of this project, this took the longest because of the iterations.
+
+Vital stats:
+
+* Model: Claude Sonnet 5 (default thinking)
+* Cost: $20.00
+* Context size: 534K tokens
+
+## M5: Deployment and verification
+
+Finally, I came to deployment.  I logged onto the Cloudflare Dashboard and created an API key with the relevant permissions, allowing command line tools to deploy the code, create the DNS zone, and set things up properly.  I created the token for Cloudflare Web Analytics by hand as well (which was as simple as clicking agreement).
+
+I also got the LLM to split out the shut down of the old blog (by implementing redirects) to a different process.  There is actually an easy way to do this on Github Pages and I intended to do that myself since it was so simple.  I also didn't want the LLM spinning on such an easy task.
+
+There were a couple of gotchas.  The main one is that, during the LLM verification, it caught a problem with Cloudflares HTML handling flag.  There are several options for how to handle redirects between the HTML file and the various other mechanisms (the file without the `.html` and without a slash or with a slash).  In the end, it added a small worker script to implement directory-index resolution in the exact way that Jekyll did the same job.  This allows the redirects from the old site to the new site to work without a double-redirect.
+
+Vital stats:
+
+* Model: Claude Sonnet 5 (default thinking)
+* Cost: $12.55
+* Context size: 411K tokens
+
+## Final thoughts
+
+Final tally: $88.77 in token credits spent, and 4 hours of wall-clock time.  Was it worth it?  For my blog, probably not.  I would have purchased a theme for much less ([ThemeForest](https://themeforest.net/) has themes for sale that are suitable for much less than that), and I understand how to do the scaffolding, deployment, and CI/CD.  The tricky parts - the plugins and the conversion - are a fraction of the cost, and I would only have needed LLM help with the plugins as the conversion is straight forward.  However, this would have been a week or more without LLM assistance.
+
+When I look back on this, it reinforces my view that not all projects need an LLM, but even those that don't technically need an LLM will be sped up by a significant amount.  I think it comes down to knowing what your limits are (like mine - I am not a designer and will probably never design a beautiful web site myself) and getting the assistance for those bits.
+
+In the end, it depends on what you want to spend - time or money.
