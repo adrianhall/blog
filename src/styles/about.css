@@ -1,0 +1,541 @@
+/*
+ * "About" page — a sketchnote-style visual bio, built as flat HTML/CSS (no
+ * canvas, no client-side JS, no third-party font/icon CDN requests — see
+ * MIGRATION_PLAN.md's privacy stance in src/pages/privacy.astro). The
+ * hand-drawn look comes from three CSS-only tricks, not raster artwork:
+ *
+ *   1. Asymmetric `border-radius` + a rotated, low-opacity `::before` ghost
+ *      outline on every card, to fake a marker line redrawn slightly off
+ *      from itself.
+ *   2. `clip-path` polygons for the name ribbon, and a rotated square for
+ *      the speech-bubble tail.
+ *   3. A real inline SVG (not a background image) for the hand-wavy career
+ *      timeline connector, so it can use `stroke="currentColor"` and stay
+ *      theme-reactive across light/dark.
+ *
+ * Colors deliberately reuse the site's existing design tokens from
+ * global.css (--color-bg/-surface/-fg/-accent/-border/-muted) rather than
+ * introducing a second palette — light mode reads as a whiteboard, dark
+ * mode as a chalkboard, and the page still respects the header's light/dark
+ * toggle like every other page on the site.
+ *
+ * The only page-specific asset is the self-hosted Caveat variable font
+ * (public/assets/fonts/caveat.woff2 — SIL Open Font License, Pablo
+ * Impallari) used for headings/handwritten annotations; body copy stays on
+ * the site's normal system font stack for readability.
+ */
+
+@font-face {
+  font-family: 'Caveat';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src:
+    url('/assets/fonts/caveat.woff2') format('woff2-variations'),
+    url('/assets/fonts/caveat.woff2') format('woff2');
+}
+
+.sketchnote {
+  --hand: 'Caveat', 'Segoe Script', cursive;
+  max-width: var(--shell-max);
+}
+
+.sketchnote h1,
+.sketchnote h2,
+.sketchnote h3 {
+  font-family: var(--hand);
+  font-weight: 700;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Hero                                                                   */
+/* ---------------------------------------------------------------------- */
+
+.sketch-hero {
+  text-align: center;
+  margin: 0 auto var(--space-8);
+  max-width: 46rem;
+}
+
+.sketch-eyebrow {
+  display: inline-block;
+  font-family: var(--hand);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-accent);
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-fg);
+  border-radius: 4px 14px 4px 14px/14px 4px 14px 4px;
+  padding: 0.2em 0.9em;
+  transform: rotate(-2deg);
+  margin-bottom: var(--space-4);
+}
+
+.sketch-hero h1 {
+  font-size: clamp(2.75rem, 6vw, 4.5rem);
+  line-height: 1;
+  margin: 0 0 var(--space-4);
+}
+
+.sketch-hero p {
+  font-size: var(--text-lg);
+  color: var(--color-muted);
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Hand-drawn squiggle divider (under card headings)                     */
+/* ---------------------------------------------------------------------- */
+
+.squiggle {
+  display: block;
+  width: 84px;
+  height: 10px;
+  margin: 0.1em 0 var(--space-4);
+  color: var(--color-accent);
+  overflow: visible;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Sketch cards                                                           */
+/* ---------------------------------------------------------------------- */
+
+.sketch-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6);
+  margin-bottom: var(--space-7);
+}
+
+@media (min-width: 980px) {
+  .sketch-grid {
+    grid-template-columns: 1fr 1.1fr 1fr;
+    align-items: start;
+  }
+
+  .sketch-grid .sketch-col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+}
+
+.sketch-card {
+  position: relative;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-fg);
+  border-radius: 26px 8px 26px 8px/8px 26px 8px 26px;
+  padding: var(--space-5) var(--space-6);
+  box-shadow: var(--shadow-sm);
+}
+
+.sketch-card::before {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border: 1.5px solid var(--color-fg);
+  border-radius: 8px 26px 8px 26px/26px 8px 26px 8px;
+  opacity: 0.22;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.sketch-card--tilt-left {
+  transform: rotate(-0.6deg);
+}
+
+.sketch-card--tilt-right {
+  transform: rotate(0.6deg);
+}
+
+.sketch-card h2 {
+  font-size: 1.75rem;
+  color: var(--color-accent);
+  margin: 0 0 0.15em;
+}
+
+.sketch-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.sketch-list li {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.sketch-list .icon-glyph {
+  flex: none;
+  width: 1.6rem;
+  height: 1.6rem;
+  color: var(--color-accent);
+  margin-top: 0.15em;
+}
+
+.sketch-list strong {
+  color: var(--color-fg);
+}
+
+.sketch-list p {
+  margin: 0;
+  font-size: 0.98rem;
+  color: var(--color-muted);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Portrait, ribbon, speech bubble (center column)                        */
+/* ---------------------------------------------------------------------- */
+
+.sketch-portrait-block {
+  text-align: center;
+  position: relative;
+  padding-top: var(--space-5);
+}
+
+.portrait-frame {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  margin: 0 auto var(--space-5);
+}
+
+.portrait-frame img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top center;
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+  position: relative;
+  z-index: 1;
+}
+
+.portrait-frame::before {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  border: 2px solid var(--color-accent);
+  border-radius: 50%;
+  transform: rotate(-8deg);
+  opacity: 0.55;
+}
+
+.speech-bubble {
+  position: absolute;
+  top: 0;
+  right: 0;
+  max-width: 210px;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-fg);
+  border-radius: 20px 20px 4px 20px;
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--hand);
+  font-size: 1.3rem;
+  line-height: 1.15;
+  transform: rotate(2deg);
+  text-align: left;
+}
+
+.speech-bubble::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  background: var(--color-surface);
+  border-right: 1.5px solid var(--color-fg);
+  border-bottom: 1.5px solid var(--color-fg);
+  right: 26px;
+  bottom: -8px;
+  transform: rotate(45deg);
+}
+
+@media (max-width: 640px) {
+  .speech-bubble {
+    position: static;
+    display: block;
+    max-width: 260px;
+    margin: 0 auto var(--space-5);
+    transform: rotate(-1deg);
+  }
+
+  .speech-bubble::after {
+    display: none;
+  }
+}
+
+.ribbon {
+  position: relative;
+  display: inline-block;
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-family: var(--hand);
+  font-weight: 700;
+  font-size: 2.1rem;
+  line-height: 1;
+  padding: 0.4em 1.5em;
+  clip-path: polygon(0% 0%, 100% 0%, 91% 50%, 100% 100%, 0% 100%, 9% 50%);
+  transform: rotate(-1.4deg);
+  margin-bottom: var(--space-3);
+}
+
+.sketch-portrait-block .role {
+  font-size: var(--text-base);
+  font-weight: 600;
+  margin: 0 0 var(--space-2);
+}
+
+.sketch-portrait-block .location-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+  margin: 0;
+}
+
+.sketch-portrait-block .location-tag .icon-glyph {
+  width: 1rem;
+  height: 1rem;
+  color: var(--color-accent);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Values strip                                                           */
+/* ---------------------------------------------------------------------- */
+
+.values-card .sketch-list p a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Tools & tech chips                                                     */
+/* ---------------------------------------------------------------------- */
+
+.tool-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+}
+
+.tool-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  border: 1.5px solid var(--color-fg);
+  border-radius: 999px;
+  padding: 0.35em 0.9em;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: var(--color-bg);
+}
+
+.tool-chip .icon-glyph--brand {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: none;
+}
+
+.sketch-aside {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+/* ---------------------------------------------------------------------- */
+/* "What I write about" category pills                                   */
+/* ---------------------------------------------------------------------- */
+
+.write-about-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+}
+
+.write-about-pills a {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4em;
+  border: 1.5px solid var(--color-fg);
+  border-radius: 999px;
+  padding: 0.35em 0.9em;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-fg);
+  text-decoration: none;
+  background: var(--color-bg);
+}
+
+.write-about-pills a:hover,
+.write-about-pills a:focus-visible {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.write-about-pills .count {
+  color: var(--color-muted);
+  font-weight: 400;
+}
+
+.sketch-card .browse-all {
+  display: inline-block;
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Journey / roles timeline                                               */
+/* ---------------------------------------------------------------------- */
+
+.journey-card {
+  padding-bottom: var(--space-6);
+}
+
+.journey-line {
+  width: 100%;
+  height: 40px;
+  color: var(--color-border);
+  margin-bottom: var(--space-4);
+  overflow: visible;
+}
+
+.journey-nodes {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--space-4);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  text-align: center;
+}
+
+.journey-nodes li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.journey-nodes .node-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  border: 2px solid var(--color-fg);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-family: var(--hand);
+  font-weight: 700;
+  font-size: 1.25rem;
+}
+
+.journey-nodes .node-company {
+  font-weight: 700;
+  color: var(--color-fg);
+}
+
+.journey-nodes .node-title {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.journey-nodes .node-years {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.journey-caption {
+  text-align: center;
+  margin: var(--space-5) 0 0;
+  font-family: var(--hand);
+  font-size: 1.3rem;
+  color: var(--color-muted);
+}
+
+@media (max-width: 760px) {
+  .journey-nodes {
+    grid-template-columns: 1fr;
+    gap: var(--space-5);
+    text-align: left;
+  }
+
+  .journey-nodes li {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--space-3);
+  }
+
+  .journey-line {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Connect footer card                                                    */
+/* ---------------------------------------------------------------------- */
+
+.connect-card {
+  text-align: center;
+}
+
+.connect-links {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+}
+
+.connect-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  border: 1.5px solid var(--color-fg);
+  border-radius: 999px;
+  padding: 0.5em 1.1em;
+  font-weight: 600;
+  color: var(--color-fg);
+  text-decoration: none;
+  background: var(--color-bg);
+}
+
+.connect-links a:hover,
+.connect-links a:focus-visible {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.connect-links .icon-glyph,
+.connect-links .icon-glyph--brand {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.sketch-credit {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-muted);
+}
+
+.sketch-credit a {
+  color: inherit;
+}

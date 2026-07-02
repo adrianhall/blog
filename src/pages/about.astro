@@ -1,0 +1,261 @@
+---
+// About page — a sketchnote-style visual bio ("About Me" per the owner's
+// request). Pure HTML/CSS (see src/styles/about.css for the hand-drawn
+// technique notes) plus two small icon components (Icon.astro for generic
+// Lucide-style pictograms, BrandIcon.astro for technology marks). No
+// third-party JS, no canvas, no client bundle.
+//
+// Career facts (roles/titles/years, LinkedIn "About" self-description) and
+// personal details (hobbies, relocation) were confirmed directly by the
+// site owner rather than scraped, since LinkedIn's guest view hides the
+// full Experience section. Category/post counts below are computed from
+// the live content collection so they never drift out of date.
+// Top-level file-style route (like privacy.astro) -> under
+// `build.format: "preserve"` this emits `/about.html`, not a `/about/`
+// directory, so `canonicalPath` below must be set explicitly (see
+// Base.astro's Props doc comment for why).
+import Base from '../layouts/Base.astro';
+import Icon from '../components/Icon.astro';
+import BrandIcon, { type BrandName } from '../components/BrandIcon.astro';
+import Squiggle from '../components/Squiggle.astro';
+import { getSortedPosts } from '../utils/posts';
+import { getCategories, getTags } from '../utils/taxonomy';
+
+import '../styles/about.css';
+
+const posts = await getSortedPosts();
+const totalPosts = posts.length;
+const categories = getCategories(posts).sort((a, b) => b.posts.length - a.posts.length);
+const topCategories = categories.filter((c) => c.posts.length >= 5).slice(0, 5);
+const aiTag = getTags(posts).find((t) => t.slug === 'ai');
+
+const roles = [
+  { company: 'Splunk', title: 'Principal Product Manager', years: '2011–2015' },
+  { company: 'Microsoft', title: 'Principal PM, Azure Mobile Apps', years: '2015–2017' },
+  { company: 'AWS', title: 'Sr. Developer Advocate, AppSync & Amplify', years: '2017–2019' },
+  { company: 'Microsoft', title: 'Principal Architect', years: '2019–2025' },
+  { company: 'Cloudflare', title: 'Principal Solutions Architect', years: '2025–Present' },
+];
+
+const toolChips: { name: BrandName; label: string }[] = [
+  { name: 'cloudflare', label: 'Cloudflare Workers' },
+  { name: 'typescript', label: 'TypeScript' },
+  { name: 'astro', label: 'Astro' },
+  { name: 'react', label: 'React' },
+  { name: 'graphql', label: 'GraphQL' },
+  { name: 'dotnet', label: '.NET' },
+  { name: 'csharp', label: 'C#' },
+  { name: 'microsoftazure', label: 'Azure' },
+  { name: 'amazonaws', label: 'AWS' },
+  { name: 'kotlin', label: 'Kotlin' },
+  { name: 'android', label: 'Android' },
+  { name: 'swift', label: 'Swift' },
+  { name: 'terraform', label: 'Terraform' },
+];
+---
+
+<Base
+  title="About"
+  description="Principal Solutions Architect at Cloudflare, recovering Product Manager, and the writer behind Because Developers are Awesome — 140+ posts on mobile, cloud, and AI since 2017."
+  canonicalPath="/about.html"
+>
+  <div class="sketchnote">
+    <header class="sketch-hero">
+      <span class="sketch-eyebrow">the human behind this blog</span>
+      <h1>Hi, I'm Adrian.</h1>
+      <p>
+        Principal Solutions Architect at Cloudflare · recovering Product Manager<br/>
+        writer of <b>Because Developers are Awesome</b> since 2017.
+      </p>
+    </header>
+
+    <div class="sketch-grid">
+      <div class="sketch-col">
+        <section class="sketch-card sketch-card--tilt-left" aria-labelledby="what-i-do-heading">
+          <h2 id="what-i-do-heading">What I Do</h2>
+          <Squiggle />
+          <ul class="sketch-list">
+            <li>
+              <Icon name="compass" />
+              <p><strong>Solutions Architecture</strong> — help teams design and ship real systems on Cloudflare's developer platform: Workers, D1, KV, Durable Objects.</p>
+            </li>
+            <li>
+              <Icon name="terminal" />
+              <p><strong>Build to learn</strong> — side projects like <a href="/posts/2026/2026-05-01-cf-workers-3.html">a serverless MUD</a> exist so I understand a platform before I try to explain it.</p>
+            </li>
+            <li>
+              <Icon name="pen-tool" />
+              <p><strong>Write &amp; teach</strong> — {totalPosts}+ posts since 2017 on mobile, cloud, GraphQL, .NET, and now AI/agentic coding.</p>
+            </li>
+            <li>
+              <Icon name="shuffle" />
+              <p><strong>Bridge product &amp; engineering</strong> — a Product Management pedigree wrapped around an architect's brain.</p>
+            </li>
+          </ul>
+        </section>
+
+        <section class="sketch-card sketch-card--tilt-right" aria-labelledby="outside-work-heading">
+          <h2 id="outside-work-heading">Outside of Work</h2>
+          <Squiggle />
+          <ul class="sketch-list">
+            <li>
+              <Icon name="bike" />
+              <p><strong>Cycling</strong> — the ideas that don't show up at a keyboard show up here.</p>
+            </li>
+            <li>
+              <Icon name="box" />
+              <p><strong>3D printing</strong> — "I could just buy one" has never once won the argument.</p>
+            </li>
+            <li>
+              <Icon name="book-open" />
+              <p><strong>Writing</strong> — the non-code kind, when I can manage it.</p>
+            </li>
+            <li>
+              <Icon name="map-pin" />
+              <p><strong>Born and Bred in the UK</strong> — 33 years in the USA, back in England again.</p>
+            </li>
+          </ul>
+        </section>
+      </div>
+
+      <div class="sketch-col">
+        <div class="sketch-portrait-block">
+          <div class="portrait-frame">
+            <img src="/assets/images/adrian-hall.jpg" alt="Cartoon portrait of Adrian Hall" width="200" height="200" loading="eager" />
+          </div>
+          <p class="speech-bubble">I write to think. If it can't survive a blog post, I don't understand it yet.</p>
+          <div class="ribbon">Adrian Hall</div>
+          <p class="role">Principal Solutions Architect, Cloudflare</p>
+          <p class="location-tag">
+            <Icon name="map-pin" />
+            North West England
+          </p>
+        </div>
+
+        <section class="sketch-card values-card" aria-labelledby="values-heading">
+          <h2 id="values-heading">Values (Tested in Public)</h2>
+          <Squiggle />
+          <ul class="sketch-list">
+            <li>
+              <Icon name="sparkles" />
+              <p><strong>Curiosity first</strong> — try it before you argue about it.</p>
+            </li>
+            <li>
+              <Icon name="message-circle" />
+              <p><strong>Clarity</strong> — if it can't survive being explained, it isn't understood yet.</p>
+            </li>
+            <li>
+              <Icon name="rocket" />
+              <p><strong>Ship, then reflect</strong> — I let an LLM write my <a href="/posts/2026/2026-07-02-blog-migration.html">entire blog migration</a>, on purpose, just to see.</p>
+            </li>
+            <li>
+              <Icon name="search" />
+              <p><strong>Question the hype</strong> — <a href="/tags/ai/">AI</a>, return-to-office, "10x engineers"… nothing gets a pass without scrutiny.</p>
+            </li>
+          </ul>
+        </section>
+      </div>
+
+      <div class="sketch-col">
+        <section class="sketch-card sketch-card--tilt-right" aria-labelledby="tools-heading">
+          <h2 id="tools-heading">Tools &amp; Technologies</h2>
+          <Squiggle />
+          <ul class="tool-chips">
+            {
+              toolChips.map((chip) => (
+                <li class="tool-chip">
+                  <BrandIcon name={chip.name} />
+                  {chip.label}
+                </li>
+              ))
+            }
+          </ul>
+          <p class="sketch-aside">Plus a working knowledge of whatever the last blog post needed.</p>
+        </section>
+
+        <section class="sketch-card sketch-card--tilt-left" aria-labelledby="write-about-heading">
+          <h2 id="write-about-heading">What I Write About</h2>
+          <Squiggle />
+          <ul class="write-about-pills">
+            {
+              topCategories.map((category) => (
+                <li>
+                  <a href={`/categories/${category.slug}/`}>
+                    {category.name} <span class="count">({category.posts.length})</span>
+                  </a>
+                </li>
+              ))
+            }
+          </ul>
+          {
+            aiTag && (
+              <p>
+                Lately, most of that energy has gone into{' '}
+                <a href={`/tags/${aiTag.slug}/`}>AI and agentic coding</a> ({aiTag.posts.length} posts and counting).
+              </p>
+            )
+          }
+          <a class="browse-all" href="/posts/">Browse all {totalPosts} posts →</a>
+        </section>
+      </div>
+    </div>
+
+    <section class="sketch-card journey-card" aria-labelledby="journey-heading">
+      <h2 id="journey-heading">The Roles That Got Me Here</h2>
+      <Squiggle />
+      <svg class="journey-line" viewBox="0 0 1040 40" preserveAspectRatio="none" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+        <path d="M20,20 Q145,0 270,20 T520,20 T770,20 T1020,20" />
+        <path d="M1005,12 L1022,20 L1005,28" />
+      </svg>
+      <ol class="journey-nodes">
+        {
+          roles.map((role, index) => (
+            <li>
+              <span class="node-number">{index + 1}</span>
+              <span class="node-company">{role.company}</span>
+              <span class="node-title">{role.title}</span>
+              <span class="node-years">{role.years}</span>
+            </li>
+          ))
+        }
+      </ol>
+      <p class="journey-caption">Five companies, one thread: make it easier for developers to ship.</p>
+    </section>
+    <br/>
+    <section class="sketch-card connect-card" aria-labelledby="connect-heading">
+      <h2 id="connect-heading">Let's Connect</h2>
+      <Squiggle />
+      <ul class="connect-links">
+        <li>
+          <a href="https://github.com/adrianhall" rel="me">
+            <BrandIcon name="github" />
+            GitHub
+          </a>
+        </li>
+        <li>
+          <a href="https://www.linkedin.com/in/adrianhall1/" rel="me">
+            <BrandIcon name="linkedin" />
+            LinkedIn
+          </a>
+        </li>
+        <li>
+          <a href="/feed.xml">
+            <BrandIcon name="rss" />
+            RSS
+          </a>
+        </li>
+        <li>
+          <a href="mailto:photoadrian@outlook.com">
+            <Icon name="mail" />
+            Email
+          </a>
+        </li>
+      </ul>
+      <p class="sketch-credit">
+        Icons: <a href="https://lucide.dev" target="_blank" rel="noopener noreferrer">Lucide</a> (ISC) &amp;
+        <a href="https://simpleicons.org" target="_blank" rel="noopener noreferrer">Simple Icons</a> (CC0). Handwriting:
+        <a href="https://fonts.google.com/specimen/Caveat" target="_blank" rel="noopener noreferrer">Caveat</a> by Pablo Impallari (SIL OFL).
+      </p>
+    </section>
+  </div>
+</Base>
