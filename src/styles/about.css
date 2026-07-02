@@ -96,6 +96,16 @@
   overflow: visible;
 }
 
+/* `text-align: center` on a heading only centers its own text — a sibling
+   block-level .squiggle needs its own auto margins to follow suit. Only the
+   two full-width, centered sections (journey timeline, connect footer) need
+   this; every other card keeps its heading and squiggle left-aligned. */
+.journey-card .squiggle,
+.connect-card .squiggle {
+  margin-left: auto;
+  margin-right: auto;
+}
+
 /* ---------------------------------------------------------------------- */
 /* Sketch cards                                                           */
 /* ---------------------------------------------------------------------- */
@@ -226,20 +236,30 @@
   opacity: 0.55;
 }
 
+/*
+ * Positioned relative to `.portrait-frame` (200x200, always centered in its
+ * column) rather than the whole `.sketch-portrait-block` column — anchoring
+ * to the column's own edges let the bubble drift past the portrait and
+ * under the neighbouring card at wide viewports. Sitting on the frame keeps
+ * it pinned to the head at every width. It hangs off the frame's upper-left
+ * so the bottom-right tail reads as pointing back at the face, like the
+ * thought is coming from him.
+ */
 .speech-bubble {
   position: absolute;
-  top: 0;
-  right: 0;
-  max-width: 210px;
+  top: -22px;
+  left: -64px;
+  max-width: 190px;
   background: var(--color-surface);
   border: 1.5px solid var(--color-fg);
-  border-radius: 20px 20px 4px 20px;
+  border-radius: 20px 20px 20px 4px;
   padding: var(--space-3) var(--space-4);
   font-family: var(--hand);
   font-size: 1.3rem;
   line-height: 1.15;
-  transform: rotate(2deg);
+  transform: rotate(-3deg);
   text-align: left;
+  z-index: 2;
 }
 
 .speech-bubble::after {
@@ -250,7 +270,7 @@
   background: var(--color-surface);
   border-right: 1.5px solid var(--color-fg);
   border-bottom: 1.5px solid var(--color-fg);
-  right: 26px;
+  right: 20px;
   bottom: -8px;
   transform: rotate(45deg);
 }
@@ -402,6 +422,7 @@
 
 .journey-card {
   padding-bottom: var(--space-6);
+  text-align: center;
 }
 
 .journey-line {
