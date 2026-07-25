@@ -1,0 +1,98 @@
+---
+title: "The era of API keys is over"
+date: 2026-07-25
+categories:
+  - Cloud Development
+tags:
+  - mobile
+  - ai
+---
+
+I recently had an email conversation with a developer regarding my open source project regarding API keys. He wanted to know how to implement API key authentication for his project. The [Datasync Community Toolkit](https://communitytoolkit.github.io/Datasync/) is a mobile data sync framework and the client apps are not in a controlled environment.
+
+API keys are really compelling. They are easy to implement and provide you an illusion that only your app is actually accessing your backend. This is one of the most persistent myths about client-side application architecture. Unfortunately, AI coding tools have learnt to reproduce this pervasive anti-pattern. In addition, the AI vendors themselves have decided that API keys are good and are using them as credentials - if they are doing it, why isn't it a good solution for everyone?
+
+![The era of API keys is over](/assets/images/2026/Jul27-banner.png)
+
+Hardcoding an API key inside an app bundle - even buried inside a compiled C++ binary or an obfuscated native library - is and always will be an architectural illusion. It's not secure. It never has been, and it never will be secure.
+
+Following on from my email discussion, I decided to do an experiment. I downloaded all the applications I have on my phone. I also downloaded [Frida](https://frida.re/) which is an instrumentation toolkit for developers and researchers, plus the standard iOS Xcode tools and Android tools. I then fired up my LLM and asked it to analyse the applications and pull out the API keys and what they were for.
+
+The LLM got 97 API keys from 70 apps, categorised by vendor. It cost me $2.55 in LLM token usage and took 20 minutes of wall time.
+
+Historically, extracting that key required someone to fire up the tools, inspect memory dumps, or route device traffic through a proxy like [Charles](https://www.charlesproxy.com/) or [Wireshark](https://www.wireshark.org/). It took a few hours of manual labour per app. Today, an agentic tool can spin up an emulator, dynamically hook TLS validation, dump runtime memory, and present the clean API key and header structure in under two minutes. 
+
+## Do API keys have value?
+
+API keys identify the app, but have been overused to identify projects, accounts, workloads, called, and credentials. They should never authenticate the user. There is no single silver bullet, but there is a modern defence-in-depth model that shifts the problem from static keys to dynamic, cryptographically verifiable trust.
+
+## Use dynamic attestation
+
+The modern standard is **hardware-backed dynamic attestation**. Instead of trusting a static secret stored in code, the backend trusts the physical device and binary integrity via hardware-backed remote attestation. On iOS, this is [DeviceCheck](https://developer.apple.com/documentation/devicecheck) and [App Attest](https://developer.apple.com/documentation/devicecheck/establishing-your-app-s-integrity). On Android, this is done via the [Play Integrity API](https://developer.android.com/google/play/integrity).
+
+Here is how it works:
+
+![App Attestation](/assets/images/2026/Jul27-attestation.png)
+
+1. The app requests a cryptographic token directly from Apple or Google servers.
+2. The OS uses the hardware [Secure Enclave](https://support.apple.com/en-gb/guide/security/sec59b0b31ff/web) or [Trusted Execution Environment](https://source.android.com/docs/security/features/trusty) to sign a short-lived token proving two things:
+
+    - The binary has not been modified or tampered with.
+    - The device is a real physical device, not an emulator, rooted phone, or bot.
+
+3. The app sends the signed token to your backend.
+4. Your backend validates the token with Apple or Google servers, which attests that the token was signed by them and the information can be trusted.
+5. Your backend, having validated your app has not been modified and is running on a real device, issues a short-lived token to authenticate the rest of the session. 
+
+Even if an AI agent decompiles your app in milliseconds, it cannot replicate Apple or Google's private key signatures without breaking hardware-level cryptographic isolation. Issuing your own token ensures you are in control of the majority of the transactions without additional latency. The app can re-attest on a regular basis, which generates a new token.
+
+Attestation is one defence-in-depth signal, not absolute proof or a replacement for authorisation and abuse controls.
+
+## Short-lived ephemeral tokens for cloud-services
+
+What happens if your app needs to communicate with a third-party service (like Firebase, AWS S3, or OpenAI)? Static API keys **must never** enter the client. Instead, apps use [OAuth 2.0 with PKCE](https://oauth.net/2/pkce/) combined with an identity provider. The user authenticates (or you use the device ID to log in anonymously). Your auth server issues an ephemeral, short-lived JWT. The client then exchanges this token for tightly scoped, temporary Cloud IAM credentials (e.g. AWS STS or GCP Web Identity Federation). If any attacker extracts the token, it expires almost instantly and grants access only to that specific user's slice of data. Your security blast radius is limited.
+
+## Reverse proxy for API keys
+
+When you must use a third-party API that only accepts a master secret key (e.g. Anthropic, Stripe, OpenAI), the client should **never** talk to that API directly. Instead, route client requests through an edge worker (such as [Cloudflare Workers](https://www.cloudflare.com/products/workers/)). By routing client requests through an edge worker:
+
+1. The upstream API key remains safely stored in backend environment variables or secret stores.
+2. The proxy verified the client's App Attestation token and applies strict rate-limiting.
+3. The proxy strips dangerous payload fields before appending the real API key and forwarding the request.
+
+## What about obfuscation?
+
+Standard obfuscators rely on stripping semantic context - turning `calculateUserDiscount()` into `a()`. Humans struggle with this because we rely on naming to navigate call stacks. LLMs, however, don't read code the way humans do. Modern tools can often recover semantics from control flow and data flow despite minification, reducing obfuscation's deterrent value. An agent can ingest 500 lines of minified JS, map the inputs and outputs, and correctly infer the intent of the code. The same LLM can then refactor the code, turn the obfuscated names into reasonable names, and generate unit tests to verify the deobfuscated logic matches the original, producing clean TypeScript in a matter of minutes.
+
+Even "compiled" code like Java (which compiles to bytecode that can be executed by a JVM) or .NET (which compiles to IL) can similarly be decompiled in a matter of minutes. The code won't be identical to the original, but the intent of the code will be the same. This is great news for companies who have lost the original source code for their enterprise apps, but a major problem for software companies trying to protect their IP.
+
+If your threat model relies on a human getting tired of reading minified JavaScript or IL, that threat model is effectively broken. Minification is primarily a bandwidth saver and not a security method. Obfuscation is not encryption.
+
+## Web applications
+
+If you are developing a Web SPA, the core reality is even harsher than mobile. There is no secure enclave, no hardware attestation, and no way to hide anything running in the browser. For years, standard practice was to store JWTs in `sessionStorage` and send them via `Authorization` headers. This is now considered bad practice for high-security applications. Any cross-site scripting vulnerability or malicious npm package instantly leaks those tokens.
+
+The modern gold standard is the **Backend for Frontend** (BFF) pattern. The SPA holds a `Secure, HttpOnly` cookie with an appropriate `SameSite` setting. The edge worker decrypts the cookie and validates the session. Private API keys and OAuth tokens are only ever stored in the edge worker session. 
+
+If you cannot run a BFF layer (and I would question this decision since edge computing for small sites is basically free these days), then use OAuth 2.0 with PKCE directly in the browser. Never use browser storage - use an in-memory token storage strictly in JavaScript memory. When the page reloads, the token is lost. Provide a silent refresh via Web Workers or a refresh token stored in a HttpOnly cookie.
+
+## Best practices
+
+If you are developing a client application and that application is not on a device controlled by you:
+
+- Use device attestation.
+- Build your own backend and proxy APIs "protected" by API keys.
+- Use OAuth 2.0 with PKCE to authenticate cloud services.
+- **NEVER** put a static API key into your client app.
+
+If you are developing a Web-based single-page application:
+
+- Use a same-site HttpOnly cookie to identify the session.
+- Build your own backend and proxy APIs "protected" by API keys.
+- Use a strict [Content Security Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy).
+- Protect your app using an edge proxy with bot protection (like [Cloudflare](https://www.cloudflare.com/products/bot-mitigation/)).
+- **NEVER** put a static API key into your client code.
+
+## The golden rule
+
+If a secret touches the user's browser or a mobile client app in any form, treat it as public information immediately. Structure your app architecture so the client app holds only a short-lived encrypted session cookie, leaving all secret management, token orchestration, and API key handling to a lightweight edge server.
