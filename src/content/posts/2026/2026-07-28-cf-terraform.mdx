@@ -338,7 +338,7 @@ Savvy developers will note that there is an API being called behind the scenes. 
 
 </Notice>
 
-Finally, don't forget about CORS. Some direct browser requests, including presigned uploads with non-safelisted headers, trigger a CORS preflight (`OPTIONS`) request and R2 rejects it without an explicit CORS policy on the bucket. CORS can be applied with Wrangler or Terraform. The Terraform resource uses []`cloudflare_r2_bucket_cors`](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/r2_bucket_cors), but I find the CORS setting to be easier via Wrangler.
+Finally, don't forget about CORS. Some direct browser requests, including presigned uploads with non-safelisted headers, trigger a CORS preflight (`OPTIONS`) request and R2 rejects it without an explicit CORS policy on the bucket. CORS can be applied with Wrangler or Terraform. The Terraform resource uses [`cloudflare_r2_bucket_cors`](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/r2_bucket_cors), but I find the CORS setting to be easier via Wrangler.
 
 Create a CORS configuration file:
 
