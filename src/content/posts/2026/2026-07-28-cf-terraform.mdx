@@ -16,7 +16,6 @@ This article is about all the little things I've learned along the way that go i
 
 ![Using Terraform with Cloudflare](/assets/images/2026/Jul28-banner.jpg)
 
-
 ## Using the same API token for Terraform and Wrangler
 
 The first problem I needed to solve was how to reuse the API token across both Terraform and Wrangler. Wrangler uses [dotenv] environment files to allow configuration, whereas Terraform doesn't read the `.env` file. Luckily, there is a Terraform module for that and I use it in every demo.

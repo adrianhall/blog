@@ -1,0 +1,193 @@
+---
+title: "Setting up a coding project for agentic coding"
+date: 2026-08-14
+categories:
+  - AI
+tags:
+  - agentic-coding
+---
+
+import Notice from '../../../components/Notice.astro';
+
+When I first started agentic coding, I made every mistake in the book.  Perhaps the worst mistake was also 
+the most invisible.  I trusted the LLM to tell the LLM what to do.  This didn't break things.  Instead, it
+led to context collapse, infinite loops that I had to manually stop, and hallucinated code.  Ultimately, it
+meant my agentic coding sessions took longer, required more manual adjustments, and cost more.
+
+![Setting up a coding project for agentic coding](/assets/images/2026/Aug14-banner.jpg)
+
+What's the alternative?  Deterministic foundations and modular, highly specific context combined with a topic
+I've written about before: [Test-driven Development](/posts/2026/2026-06-07-agentic-testing.html).  I haven't
+really written more than a few lines of code in over a year following some simple rules. In this article, I 
+am taking a look at how I set up a new project for agentic coding.
+
+<Notice type="info">
+
+I am a big fan of [OpenCode] and [OpenChamber] for my agentic coding sessions.  Some things may move around
+if you use a different coding agent, so be aware that the concepts will remain the same, but the files and
+directories you use may be different.
+
+</Notice>
+
+## Scaffold your project by hand
+
+When I started off, I asked the coding agent to scaffold my projects for me.  It's a waste of money and it makes
+your starting point vary between projects.  Imagine if every project had a different choice for linting, formatting,
+and testing. You need to decide on your tech stack early.  In most cases, you can set this up using a deterministic
+tool.
+
+If you really want to scaffold with an agent, then make the agent produce a template project.  Then scaffold with
+the template project.  This still saves you precious tokens on a per-project basis.
+
+I do a lot of Cloudflare development these days, so my go to tool is `npm create cloudflare@latest`:
+
+```bash
+npm create cloudflare@latest -- --framework=vue --ts
+```
+
+This will create a [Cloudflare Workers] project using the [C3 CLI] supporting Vue.  From there, I add [Hono] and
+my own [cloudflare-toolkit] for authentication. If you are interested in detailed instructions on how to deploy your own code to Cloudflare, check out [their in-depth instructions](https://developers.cloudflare.com/pages/get-started/c3/).
+
+## Choose your skills
+
+Skills are small modular instructions for your coding agent that only get loaded when they are needed. There are
+two types of skills - the skills you choose because someone has done the work for you, and the skills
+you write yourself. Both are useful. Skills go in `.agents/skills` within my project.
+
+I start with per-project skills that someone else has written.  These include my generic ones.  For example, I have a skill that I maintain that focuses on the [best practices when writing Terraform for Cloudflare deployments](https://github.com/adrianhall/cloudflare-toolkit).  There are a lot of skills on [skills.sh](https://skills.sh) and you can install them with `npx skills add`.  Here are some of my favorites:
+
+* [cloudflare/skills](https://www.skills.sh/cloudflare/skills) (obviously)
+* [cloudflare-toolkit](https://www.skills.sh/adrianhall/cloudflare-toolkit) (also somewhat obviously - this one has the Terraform best practices in it)
+* [web-design-guidelines](https://www.skills.sh/vercel-labs/agent-skills/web-design-guidelines)
+* [vuejs-ai/skills](https://www.skills.sh/vuejs-ai/skills)
+
+This set really depends on what your tech stack is.  
+
+<Notice type="info">
+
+While we are on the topic of the skills that work for your tech stack, have a look to see if each element of
+your tech stack has an MCP server for the documentation.  I've found that adding an instruction to consult the
+documentation before assuming an API is incredibly useful in taming the LLM.
+
+</Notice>
+
+## Write your skills
+
+What distinguishes a software engineer from a vibe-coder?  The answer is that the software engineer has gone
+through many situations where pain has ingrained experience into their work.  Software engineers know how to
+do things based on a lifetime of small anecdotes that make their stuff just work better.  This surfaces when
+you ask a software engineer for an opinion.
+
+I write skills to codify these experiences.  I tend to write a single skill for each layer of the application.
+
+* **User Interface** - What component libraries should be used?  What should the LLM do when a component isn't
+  available?  How do I like to test components?  Should I create a [Storybook] entry?
+* **REST and GraphQL APIs** - I have a **lot** of opinions here - from RFC 9110 conformance, to HATEOAS link
+  format, to how problem reports are generated.
+* **Repositories and Libraries** - When do I just call the database vs. when do I establish a repository pattern?
+* **Testing** - what do I use for coverage?  What coverage levels do I target?  What sort of tests do I write?
+  How do I run the entire test suite?
+* **Deployment** - how do I deploy?  When do I allow the LLM to deploy?
+
+I'm sure there are more.  No pre-built skill will help you here.  These are your learned experiences written down.
+
+<Notice type="info">
+
+What about global skills?  Yes, I have them.  Since I do so much work with the [Cloudflare Dev Platform] these
+days, the `cloudflare/skills` skills are globally loaded.  However, consider if the project will only be used
+by you or if you expect others to contribute.  If the latter, you need to set the project up for future
+contributors as well.
+
+</Notice>
+
+Skills are only loaded when required, so you can put more detail in them.  However, keep them focused.  Just like
+you shouldn't create "god classes" when coding, you also shouldn't create "god skills" that end up being loaded
+all the time.
+
+## Write a focused AGENTS.md
+
+The `README.md` is for human readers.  The `AGENTS.md` is for agentic contributors.  Most project instructions I have seen suggest writing `AGENTS.md` first.  This is just wrong.  You need to understand your what skills you are going to use before you touch `AGENTS.md`.  I've also seen advice that you should get your LLM to analyze your project and write the `AGENTS.md` for you.  Again, this is wrong.  The `AGENTS.md` provides guardrails for your LLM and it is included in every single prompt.  You should write a tightly focused `AGENTS.md` by hand with your instructions.
+
+Here is what is in my typical `AGENTS.md`:
+
+* A 2-3 sentence description of the application.
+* A bullet list of the tech stack.
+* A list of available skills and when to use them.
+* A basic instruction set for how to build, lint, and test the application.
+* A series of DO/DON'T instructions.
+
+I generally start with very few DO/DON'T instructions.  This is the section that is added to when I feel the need
+based on what the LLM is actually doing. Since these are global, focus on boundary setting.  For example:
+
+```text
+### Dependencies & Environment
+
+* **DO** use `pnpm` for all package management.
+* **DO** install the latest version of all packages unless there is a specific reason for an earlier version.
+* **DON'T** install new dependencies by editing `package.json`.
+```
+
+Notice how these use absolutes, and capitalizes the directive.  This is useful for reinforcing the instructions
+with the LLM.  Avoid words like "consider" or "if helpful".  These make the LLM burn more tokens.
+
+## Add a `.agentignore` as well
+
+Just as you use `.gitignore` to keep your repository clean, you need an `.agentignore` to keep the agent's context window clean.  Agents will aggressively read files that they think are appropriate.  Take a look at `package-lock.json` or `pnpm-lock.json` compared to `package.json` - same data, but completely different sizes.  This affects your context size.
+
+Explicitly block the agent from seeing build directories, log files, lockfiles, and complex static assets by listing them in the `.agentignore` file.
+
+## Adopt Test-Driven Development
+
+Tell an agent to "build a registration form".  What will it do?  It will probably write a React form with a
+username, two password fields, and an email address.  It will then go on to add a password strength meter,
+and try to integrate a third-party OAuth provider you didn't ask for.  It does this because the data it was
+trained on (basically, every public repo on GitHub) includes this stuff, so it's normal.  However, it's likely
+not your requirements.
+
+I actually use two agents for my coding activities - one to write the tests and one to write the code. By
+[adopting test-driven development](/posts/2026/2026-06-07-agentic-testing.html), I can set the criteria by
+which the coding agent stops coding.
+
+For instance, I will set up a `registration-form.test.tsx` and add comments into the file indicating what to
+test:
+
+```ts
+// Test 1: Check that only valid email addresses are accepted
+// Test 2: Check that only strong passwords are accepted
+// Test 3: Check that the two passwords on the form have to be identical
+// Test 4: Check that cancel does not call the registration endpoint
+// ... and so on
+```
+
+Note that I'm still not writing code.  I am, however, thinking through what I want to be testing in a very
+granular way.  The LLM is great at writing the code for these, and my test writing agent will take this
+file and fill out the details for me.
+
+Once that is done, I can manually run the tests and see that they are failing.  Now I can go to the coding
+agent and tell it to write the code to make the tests pass, then stop coding once the tests pass.  This puts
+constraints on the coding process.
+
+## Mocking and Secrets Management
+
+I've seen a lot of situations on the Reddit boards where a runaway agent has deleted production data or done
+some other nefarious thing.  LLMs do not break out of their sandbox unless you let them.  
+
+A common thing in Cloudflare development is to use a `CLOUDFLARE_API_TOKEN` for deployment.  I store this in
+a `.env` file.  However, I also provide a `.env.agent` file that the agent can use.  The `.env` file is in
+my `.agentignore` and it's also listed in my `opencode.jsonc` file so that I'm practicing defense in depth.
+I am responsible for production deployments - not the agent.  I may give the agent a dev account API token so
+it can validate that it can deploy, but I'm not letting it near production.
+
+## Final thoughts
+
+Some simple rules when setting up your project (or even if you are adding agentic coding to an existing
+project) will go a long way to reducing context bloat.  That makes your agentic coding sessions faster
+and also saves you money.
+
+[OpenCode]: https://opencode.ai
+[OpenChamber]: https://openchamber.dev
+[Cloudflare Workers]: https://developers.cloudflare.com/workers/
+[Hono]: https://hono.dev
+[cloudflare-toolkit]: https://adrianhall.github.io/cloudflare-toolkit/
+[C3 CLI]: https://developers.cloudflare.com/pages/get-started/c3/#cli-arguments
+[Cloudflare Dev Platform]: https://developers.cloudflare.com/
