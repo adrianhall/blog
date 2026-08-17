@@ -66,49 +66,49 @@ I haven't got there yet, but you can [see my current stat on my GitHub repositor
 
 Some notes for you to consider while reviewing this code set:
 
-* I had some initial trouble with authentication when running locally.  Cloudflare Access is not available when you run `pnpm run dev`.  To solve this, I created a small `cloudflare-auth` library.  It acts as a middleware for Hono or Astro and does pretty much the same thing as the One-time PIN setup in Cloudflare Access.  This allows you to run things that are normally protected by Cloudflare Access locally.  You add the following to your Hono setup:
+* I had some initial trouble with authentication when running locally.  Cloudflare Access is not available when you run `pnpm run dev`.  To solve this, I created a small `cloudflare-auth` library (superceded by the [`@adrianhall/cloudflare-toolkit`](https://adrianhall.github.io/cloudflare-toolkit) project).  It acts as a middleware for Hono or Astro and does pretty much the same thing as the One-time PIN setup in Cloudflare Access.  This allows you to run things that are normally protected by Cloudflare Access locally.  You add the following to your Hono setup:
 
   ```ts
-  import \{ Hono \} from "hono";
-  import \{ api \} from "./api";
-  import \{
+  import { Hono } from "hono";
+  import { api } from "./api";
+  import {
     developerAuthentication,
     cloudflareAccess,
     type AuthVariables,
     type PathPolicy
-  \} from "@lib/cloudflare-auth";
-  import \{ createLogger \} from "@lib/cloudflare-logging";
+  } from "@lib/cloudflare-auth";
+  import { createLogger } from "@lib/cloudflare-logging";
 
   // This is my Durable Object.
-  export \{ ZoneProcessor \} from "./zone-processor";
+  export { ZoneProcessor } from "./zone-processor";
 
   // Authentication Policies - use these to make some things non-authenticated  
   const authPolicies: PathPolicy[] = [
-    \{ pattern: /^\/api\/version$/, authenticate: false \},
-    \{ pattern: /^\/api\//, authenticate: true \}
+    { pattern: /^\/api\/version$/, authenticate: false },
+    { pattern: /^\/api\//, authenticate: true }
   ];
 
   /** Root Hono application bound to the Worker `Env`. */
-  const app = new Hono<\{ Bindings: Env; Variables: AuthVariables \}>();
+  const app = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
   // Developer authentication simulates Cloudflare Access when running
   // locally.  In production (behind real Access) it is a transparent no-op.
-  const devAuthLogger = createLogger("dev-auth", \{ minLogLevel: "warn" \});
-  app.use(developerAuthentication(\{ policies: authPolicies, logger: devAuthLogger \}));
+  const devAuthLogger = createLogger("dev-auth", { minLogLevel: "warn" });
+  app.use(developerAuthentication({ policies: authPolicies, logger: devAuthLogger }));
 
   // Cloudflare Access middleware validates the JWT (real or dev-generated)
   // and sets `userEmail` / `userSub` on the Hono context.
   const accessLogger = createLogger("cf-access");
-  app.use(cloudflareAccess(\{ policies: authPolicies, logger: accessLogger \}));
+  app.use(cloudflareAccess({ policies: authPolicies, logger: accessLogger }));
 
   // Hook in my API router to the Hono route.
   app.route("/api", api);
 
   // Catch-all: after auth middleware and API routes, serve static assets
   // (the React SPA) via the ASSETS binding.  
-  app.all("*", async (c) => \{
+  app.all("*", async (c) => {
     return c.env.ASSETS.fetch(c.req.raw);
-  \});
+  });
 
   export default app;
   ```
@@ -116,16 +116,16 @@ Some notes for you to consider while reviewing this code set:
   If you want your static assets to be authenticated, then it's important to include the ASSETS binding and the last few lines.  You can set up proper assets binding in your `wrangler.jsonc` like this:
 
   ```json
-  "assets": \{
+  "assets": {
     "not_found_handling": "single-page-application",
     "run_worker_first": true,
     "binding": "ASSETS"
-  \},
+  },
   ```
 
   With this setup, all requests go through the worker first.  The catch-all (`app.all()`) sets the requests for static assets from the binding.
 
-* I also had issues with logging.  I wanted a modular logger that I could silence when running tests, yet still get nicely formatted logs in dev and structured logging in production.  I created `cloudflare-logging` library for this.  You'll see it set up throughout my application.
+* I also had issues with logging.  I wanted a modular logger that I could silence when running tests, yet still get nicely formatted logs in dev and structured logging in production.  I created `cloudflare-logging` library for this (also superceded by `@adrianhall/cloudflare-toolkit`).  You'll see it set up throughout my application.
 
 * My Durable Object - `zone-processor.ts` has an RPC method (`getHealth()`) - you can trace how this gets called via the `/api/health` endpoint in the worker.  It also has all the setup for hibernating web sockets, so it's a really good file to concentrate on to see how this stuff works.
 
