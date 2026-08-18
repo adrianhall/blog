@@ -5,7 +5,10 @@ categories:
   - Devtools
 tags:
   - ai
+mermaid: true
 ---
+
+import Mermaid from '../../../components/Mermaid.astro';
 
 In [my last article](/posts/2026/2026-04-07-agentic-engineer-1.html), I introduced ten rules to help you move from vibe-coder to AI Product Architect by building specs.  However, I glossed over a few of the details.  The basic problem is that most people write specs for themselves - a human.  You aren't writing for a human, so why do you think it would look the same? In this article, I'm going in depth into using product management techniques to write a spec that agents love.
 
@@ -44,22 +47,18 @@ Let's re-write this using **Jobs to be done**: `When I [receive a submitted comm
 
 We can also illustrate the state machine for this feature.  When you add a state machine to the spec, you are essentially telling the agent "The comment doesn't just exist; it moves through a lifecycle." and that can help frame the HOW in addition to the WHY.  Instead of just asking for an Insert function, you define the transitions:
 
-```text
-stateDiagram-v2
+<Mermaid code={`stateDiagram-v2
     [*] --> New: Reader Submits
     New --> Triage: classifyComment()
-    
     state Triage {
         [*] --> Analyzing
         Analyzing --> Approved: High Signal
         Analyzing --> Quarantined: Low Signal
         Analyzing --> ManualReview: Fail/Ambiguous
     }
-    
     Approved --> UI_Live: Optimistic Sync
     ManualReview --> UI_Pending: Notify Reader
-    Quarantined --> [*]: Silent Remove
-```
+    Quarantined --> [*]: Silent Remove`} />
 
 As you can see, there can be a lot of transitions to discuss when you consider a full lifecycle of a comment.  I haven't handled all of them - manual review can also move to quarantined or approved through a button press - what happens then? Defining the flow via state machines is great for nailing the logic when it matters most.  
 
