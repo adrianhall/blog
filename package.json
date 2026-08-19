@@ -8,12 +8,10 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build && pagefind --site dist",
+    "build": "astro build && pagefind --site dist && npm run check-build",
     "preview": "astro preview",
-    "check": "astro check && node scripts/verify-urls.mjs",
-    "snapshot-urls": "node scripts/verify-urls.mjs --freeze",
-    "convert": "node scripts/convert-content.mjs",
-    "assert": "node scripts/assert-build.mjs",
+    "check": "astro check && npm run check-build",
+    "check-build": "node scripts/check-build.mjs",
     "publish": "npm run build && npm run check && wrangler deploy"
   },
   "dependencies": {

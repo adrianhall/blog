@@ -44,11 +44,15 @@ jobs:
         env:
           PUBLIC_CF_BEACON_TOKEN: ${{ secrets.PUBLIC_CF_BEACON_TOKEN }}
 
-      - name: Verify (astro check + URL contract)
-        # scripts/verify-urls.mjs compares dist against the committed
-        # scripts/legacy-urls.json manifest here, since the old Jekyll repo
-        # (adrianhall.github.io) is never checked out in this workflow. See
-        # the script's header comment / `npm run snapshot-urls`.
+      - name: Verify (astro check + build correctness checks)
+        # `npm run build` above already gates on scripts/check-build.mjs (route
+        # shape + internal link/asset integrity); this step adds `astro check`
+        # (types/content-schema) and re-runs those checks so `npm run check`
+        # stays meaningful when invoked on its own.
+        #
+        # The Jekyll-era URL-contract verifier was retired to
+        # scripts/migration/ once the migration completed -- see the README
+        # there before reinstating any of it.
         run: npm run check
 
       - name: Deploy to Cloudflare Workers

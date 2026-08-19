@@ -24,7 +24,7 @@ export default defineConfig({
   // Expressive Code must be registered before MDX so its blocks work in .mdx too.
   // The line-numbers plugin renders the old Jekyll `linenos` / kramdown
   // `.line-numbers` blocks. It is OFF by default and opted into per code block
-  // via a `showLineNumbers` meta flag (emitted by scripts/convert-content.mjs);
+  // via a `showLineNumbers` meta flag (emitted by scripts/migration/convert-content.mjs);
   // `startLineNumber=N` reproduces the old `data-start` offset.
   integrations: [
     expressiveCode({
