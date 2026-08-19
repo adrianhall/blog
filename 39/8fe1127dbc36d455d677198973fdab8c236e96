@@ -1,0 +1,21 @@
+astro.config.mjs
+  s_8471d43995d41e::t_bc02bb9dca5a6e 27
+src/content/posts/2026/2026-08-18-code-readability.mdx
+  s_8471d43995d41e::t_5aa386cf7b8c85 99-100,107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "398fe1127dbc36d455d677198973fdab8c236e96",
+  "prompts": {},
+  "sessions": {
+    "s_8471d43995d41e": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fe71ea26fffemKQ2zGqWYQq8CN",
+        "model": "claude-opus-5"
+      },
+      "human_author": "ahall <ahall@cloudflare.com>"
+    }
+  }
+}
