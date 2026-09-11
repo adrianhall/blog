@@ -1,0 +1,75 @@
+package.json
+  s_30c0db8fe6bb13::t_8bda8b8f3720e8 10,16-18
+src/components/Analytics.astro
+  s_30c0db8fe6bb13::t_5f178c4e37d2ed 2-4
+src/components/BrandIcon.astro
+  s_30c0db8fe6bb13::t_71cb8ba69689d8 3-4
+src/components/Comments.astro
+  s_30c0db8fe6bb13::t_b4d3547475f29c 2-3
+src/components/Figure.astro
+  s_30c0db8fe6bb13::t_7fe99d27054f54 2
+src/components/Icon.astro
+  s_30c0db8fe6bb13::t_0402f3672bcd02 2-3
+src/components/Mermaid.astro
+  s_30c0db8fe6bb13::t_206ce5e52cc9d2 2-3
+src/components/Notice.astro
+  s_30c0db8fe6bb13::t_0d7b52c8a761f5 2
+src/components/PostList.astro
+  s_30c0db8fe6bb13::t_109d0aebe09a02 2-3
+src/components/ShareButtons.astro
+  s_30c0db8fe6bb13::t_acc8e9b4610ea8 2-8,114,124,131,145-146,154,165
+src/components/Squiggle.astro
+  s_30c0db8fe6bb13::t_21b24758fdf620 2-3
+src/components/TableOfContents.astro
+  s_30c0db8fe6bb13::t_24cab8794a797e 2-4,28
+src/components/ThemeToggle.astro
+  s_30c0db8fe6bb13::t_dcb4dd08cacb74 2-3,36
+src/components/comments/GiscusComments.astro
+  s_30c0db8fe6bb13::t_25a808915db661 3-5,10
+src/content/posts/2026/2026-08-25-agent-authentication.mdx
+  s_30c0db8fe6bb13::t_b36065376702c7 13-15
+src/layouts/Base.astro
+  s_30c0db8fe6bb13::t_6b2bc2cc4a72ac 3,12,16-17,60-61,69,88-89
+src/layouts/ListLayout.astro
+  s_30c0db8fe6bb13::t_7eea1852084de1 2-4
+src/layouts/PostLayout.astro
+  s_30c0db8fe6bb13::t_397b1fe3452631 3-5,15
+src/pages/404.astro
+  s_30c0db8fe6bb13::t_3603b1de6ae040 2
+src/pages/about.astro
+  s_30c0db8fe6bb13::t_1033663519b829 2-6
+src/pages/categories/[category]/index.astro
+  s_30c0db8fe6bb13::t_c443038149b079 2
+src/pages/categories/index.astro
+  s_30c0db8fe6bb13::t_92143db0f65001 2
+src/pages/index.astro
+  s_30c0db8fe6bb13::t_ee6ab5a82300fa 2
+src/pages/posts/[...slug].astro
+  s_30c0db8fe6bb13::t_07b61274daa77c 2,12-13
+src/pages/posts/index.astro
+  s_30c0db8fe6bb13::t_14fdc00add3d79 2
+src/pages/privacy.astro
+  s_30c0db8fe6bb13::t_667a958837f096 2
+src/pages/tags/[tag]/index.astro
+  s_30c0db8fe6bb13::t_bdce6495d9f89f 2
+src/pages/tags/index.astro
+  s_30c0db8fe6bb13::t_171b31b7fb6f8e 2
+src/pages/tags/page/[num]/index.astro
+  s_30c0db8fe6bb13::t_88976b7b37b31f 2-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "72df4d906104470bc422dfbacf2c7ed82e2ff4a9",
+  "prompts": {},
+  "sessions": {
+    "s_30c0db8fe6bb13": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f6f989e76ffe5YWXnoeNmioUyo",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "ahall <ahall@cloudflare.com>"
+    }
+  }
+}
