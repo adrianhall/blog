@@ -1,11 +1,6 @@
 ---
-// URL-contract compatibility route: `/tags/page/<num>/`.
-//
-// The old Jekyll `_pages/tags.html` had `pagination: enabled`, so
-// jekyll-paginate-v2 emitted `/tags/page/2..N/` as paginated POST-LIST pages
-// (page 1 — `/tags/` — is the tag cloud; pages 2+ listed posts). We reproduce
-// pages 2..N here with the same paginated post list so those indexed URLs keep
-// resolving. Page 1 is intentionally omitted (it is `/tags/`).
+// Tags-listing pagination 2..N, served at /tags/page/<num>/. Page 1 is
+// /tags/ (the tag cloud) and is omitted here.
 import ListLayout from '../../../../layouts/ListLayout.astro';
 import PostList from '../../../../components/PostList.astro';
 import { getSortedPosts, PER_PAGE } from '../../../../utils/posts';

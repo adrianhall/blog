@@ -1,22 +1,13 @@
 ---
 // Giscus (https://giscus.app) provider implementation for the pluggable
-// `<Comments>` component (see `../Comments.astro`). Backed by the new repo's
-// GitHub Discussions per MIGRATION_PLAN.md handoff fact #3 (Discussions
-// enabled, "Comments" category created).
-//
-// Giscus ships as a `<script>` tag that Giscus's own client renders into an
-// iframe, rather than an npm package — there is nothing to `import`. The
-// script is inserted client-side (not written directly here) so we can pick
-// its initial `data-theme` from whatever theme is already active on the page
-// (set by the pre-paint script in Base.astro) instead of hard-coding
-// "light". A `bda:themechange` listener (dispatched by ThemeToggle.astro)
-// keeps the embedded iframe in sync via `postMessage` if the visitor toggles
-// theme after the widget has loaded.
+// Comments component. Inserts the Giscus client script tag on the client
+// side, sets its initial data-theme from the page's current theme, and
+// syncs the embedded iframe's theme on bda:themechange.
 import { GISCUS_CONFIG } from '../../config/giscus';
 
 interface Props {
   /** Optional explicit discussion term. Defaults to the current page's
-   *  pathname (matches `mapping: "pathname"` in GISCUS_CONFIG). */
+   *  pathname. */
   term?: string;
 }
 const { term } = Astro.props;

@@ -1,28 +1,11 @@
 ---
-// Simple, dependency-free share links (the "native" option from
-// MIGRATION_PLAN.md § M4 — "Share component (AddToAny or native)"). No
-// third-party script is loaded (AddToAny would mean shipping its tracking
-// JS, which cuts against the rest of this migration's privacy stance —
-// Clarity dropped, Disqus dropped in favor of Giscus, analytics moved to
-// Cloudflare's cookie-less Web Analytics).
-//
-// **Platform list matches the old site's actual AddToAny config**
-// (`_includes/social-share.html` in the source repo), not a generic
-// "popular networks" guess: copy link, email, Bluesky, Facebook, LinkedIn,
-// Mastodon, Reddit, Threads. X/Twitter was never in that list and is
-// intentionally excluded. Slashdot was in the old list too, but its own
-// share/bookmark feature has been dead since 2018 — confirmed live while
-// fixing this
-// (`curl https://slashdot.org/bookmark.pl?...` → "New bookmark creation is
-// no longer supported") — so it's dropped rather than shipping a button that
-// leads to a dead feature on Slashdot's own site. Brand icon paths are from
-// the CC0-licensed Simple Icons project (simpleicons.org); the generic
-// email/native-share/copy-link icons are Lucide-style outline icons to match
-// this component's original two.
-//
-// Also renders a "Share via…" button using the Web Share API (progressively
-// enhanced — hidden unless `navigator.share` exists) and a "Copy link"
-// button using the Clipboard API with an `execCommand` fallback.
+// Dependency-free share links: copy link, email, Bluesky, Facebook,
+// LinkedIn, Mastodon, Reddit, Threads. Also renders a "Share via..." button
+// using the Web Share API (hidden unless navigator.share exists) and a
+// "Copy link" button using the Clipboard API with an execCommand fallback.
+// Brand icon paths are from the CC0-licensed Simple Icons project
+// (simpleicons.org); the generic email/native-share/copy-link icons are
+// Lucide-style outline icons.
 interface Props {
   url: string;
   title: string;
@@ -128,7 +111,7 @@ const { url, title } = Astro.props;
       nativeButton.hidden = false;
       nativeButton.addEventListener('click', () => {
         navigator.share({ title, url }).catch(() => {
-          // Ignore — most rejections are the user dismissing the share sheet.
+          // Ignore.
         });
       });
     }
@@ -138,16 +121,14 @@ const { url, title } = Astro.props;
       try {
         await navigator.clipboard.writeText(url);
       } catch {
-        // Fallback for browsers without Clipboard API / insecure contexts.
+        // Fallback for browsers without Clipboard API.
         const input = document.createElement('textarea');
         input.value = url;
         input.style.position = 'fixed';
         input.style.opacity = '0';
         document.body.appendChild(input);
         input.select();
-        // `execCommand` is deprecated but remains the only fallback for
-        // browsers/contexts without the async Clipboard API. Called via an
-        // untyped indirection so the deprecation hint doesn't follow it here.
+        // Uses execCommand via an untyped indirection.
         const legacyCopy: (command: string) => boolean = (document as unknown as { execCommand: (command: string) => boolean }).execCommand.bind(document);
         legacyCopy('copy');
         document.body.removeChild(input);
@@ -161,13 +142,8 @@ const { url, title } = Astro.props;
       }, 2000);
     });
 
-    // Mastodon is federated — there's no single "mastodon.com" to link to.
-    // The widely-used pattern (AddToAny's own Mastodon button does this too)
-    // is to ask the visitor which instance they're on once, remember it, and
-    // send them to that instance's own compose-intent endpoint
-    // (`https://<instance>/share?text=...`, documented behaviour: redirects
-    // to sign-in if logged out, straight to a pre-filled compose box if
-    // logged in).
+    // Prompts for the visitor's Mastodon instance once, remembers it in
+    // localStorage, and opens that instance's compose-intent endpoint.
     const mastodonButton = root.querySelector<HTMLButtonElement>('[data-share-mastodon]');
     mastodonButton?.addEventListener('click', () => {
       const STORAGE_KEY = 'bda-mastodon-instance';
@@ -175,7 +151,7 @@ const { url, title } = Astro.props;
       try {
         instance = localStorage.getItem(STORAGE_KEY);
       } catch {
-        // Ignore (e.g. storage disabled) — falls through to prompting below.
+        // Ignore. Falls through to prompting below.
       }
 
       if (!instance) {
@@ -186,7 +162,7 @@ const { url, title } = Astro.props;
         try {
           localStorage.setItem(STORAGE_KEY, instance);
         } catch {
-          // Ignore — the share still works this once, just isn't remembered.
+          // Ignore.
         }
       }
 

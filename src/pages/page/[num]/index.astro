@@ -1,6 +1,6 @@
 ---
-// Home pagination pages 2..N -> `/page/<num>/`. Page 1 is the site root (`/`),
-// so it is intentionally excluded here (matches the old Jekyll behaviour).
+// Home pagination pages 2..N, served at /page/<num>/. Page 1 is the site
+// root and is excluded here.
 import ListLayout from '../../../layouts/ListLayout.astro';
 import PostList from '../../../components/PostList.astro';
 import { getSortedPosts, PER_PAGE } from '../../../utils/posts';
@@ -15,10 +15,6 @@ export async function getStaticPaths() {
   return paths;
 }
 
-interface Props {
-  num: number;
-  totalPages: number;
-}
 const { num, totalPages } = Astro.props;
 const posts = await getSortedPosts();
 const pagePosts = posts.slice((num - 1) * PER_PAGE, num * PER_PAGE);

@@ -1,13 +1,6 @@
 ---
-// Light/dark toggle. The pre-paint theme script that avoids a flash of the
-// wrong theme lives in `Base.astro`'s `<head>` (it must run before first
-// paint); this component only owns the button and its click handler.
-//
-// On toggle it also dispatches a `bda:themechange` CustomEvent on
-// `document` (detail: { theme }) so other components that need to react to
-// theme changes at runtime — the Mermaid renderer and the Giscus embed, both
-// wired up in Base.astro / Comments.astro — don't need to duplicate the
-// toggle logic themselves.
+// Light/dark toggle button. Dispatches a bda:themechange CustomEvent on
+// document (detail: { theme }) whenever the theme changes.
 ---
 
 <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">
@@ -40,7 +33,7 @@
     try {
       localStorage.setItem(STORAGE_KEY, next);
     } catch {
-      // Ignore (e.g. storage disabled) — the toggle still works for this load.
+      // Ignore.
     }
     syncLabel();
     document.dispatchEvent(new CustomEvent('bda:themechange', { detail: { theme: next } }));

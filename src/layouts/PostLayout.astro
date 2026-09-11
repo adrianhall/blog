@@ -1,13 +1,8 @@
 ---
 // Post layout: byline (date + reading time), tags, a widescreen article grid
-// with a sticky table-of-contents rail on wide screens, share buttons, and
-// the pluggable `<Comments>` component (Giscus). Built per
-// MIGRATION_PLAN.md § M4; the article-grid/rail shell itself is promoted
-// from the Milestone 3 Direction C preview (`src/pages/design-preview/c/post.astro`),
-// but the rail now holds a real `<TableOfContents>` instead of just post meta
-// (see the M3 "Deferred to M4" note), and the article gains `<ShareButtons>`
-// + `<Comments>` below the prose, neither of which existed in the preview.
-import type { MarkdownHeading } from '@astrojs/markdown-remark';
+// with a sticky table-of-contents rail, share buttons, and the pluggable
+// Comments component.
+import type { MarkdownHeading } from 'astro';
 import Base from './Base.astro';
 import TableOfContents from '../components/TableOfContents.astro';
 import ShareButtons from '../components/ShareButtons.astro';
@@ -17,8 +12,7 @@ interface Props {
   title: string;
   description?: string;
   /** The post's canonical served path, e.g.
-   *  `/posts/2024/2024-09-03-aspnetcore-options.html` (see the `canonicalPath`
-   *  note on `Base.astro` for why this can't be derived from `Astro.url`). */
+   *  /posts/2024/2024-09-03-aspnetcore-options.html. */
   path: string;
   date: Date;
   minutes: number;

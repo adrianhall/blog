@@ -1,7 +1,5 @@
 ---
-// Individual post route. This is a FILE-style route (not `[...slug]/index.astro`)
-// so under `build.format: "preserve"` each page is emitted as a literal
-// `.html` file: `/posts/<id>.html` — preserving the exact legacy Jekyll URLs.
+// Individual post route. Emitted as a literal .html file: /posts/<id>.html.
 import { getCollection, render } from 'astro:content';
 import PostLayout from '../../layouts/PostLayout.astro';
 import { getPostDate, getPostUrl } from '../../utils/posts';
@@ -11,8 +9,8 @@ import type { Post } from '../../utils/posts';
 export async function getStaticPaths() {
   const posts = await getCollection('posts');
   return posts.map((post) => ({
-    // `post.id` already includes the year directory, e.g.
-    // `2017/2017-08-11-integrating-react-native-typescript-mobx`.
+    // post.id already includes the year directory, e.g.
+    // 2017/2017-08-11-integrating-react-native-typescript-mobx.
     params: { slug: post.id },
     props: { post },
   }));

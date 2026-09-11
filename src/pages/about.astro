@@ -1,19 +1,9 @@
 ---
-// About page — a sketchnote-style visual bio ("About Me" per the owner's
-// request). Pure HTML/CSS (see src/styles/about.css for the hand-drawn
-// technique notes) plus two small icon components (Icon.astro for generic
-// Lucide-style pictograms, BrandIcon.astro for technology marks). No
-// third-party JS, no canvas, no client bundle.
-//
-// Career facts (roles/titles/years, LinkedIn "About" self-description) and
-// personal details (hobbies, relocation) were confirmed directly by the
-// site owner rather than scraped, since LinkedIn's guest view hides the
-// full Experience section. Category/post counts below are computed from
-// the live content collection so they never drift out of date.
-// Top-level file-style route (like privacy.astro) -> under
-// `build.format: "preserve"` this emits `/about.html`, not a `/about/`
-// directory, so `canonicalPath` below must be set explicitly (see
-// Base.astro's Props doc comment for why).
+// About page, a sketchnote-style visual bio. Pure HTML/CSS plus two small
+// icon components (Icon.astro for generic pictograms, BrandIcon.astro for
+// technology marks). Category/post counts are computed from the live
+// content collection. Emits /about.html, so canonicalPath is set explicitly
+// below.
 import Base from '../layouts/Base.astro';
 import Icon from '../components/Icon.astro';
 import BrandIcon, { type BrandName } from '../components/BrandIcon.astro';

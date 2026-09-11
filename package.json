@@ -7,12 +7,15 @@
     "node": ">=24"
   },
   "scripts": {
+    "predev": "astro check",
     "dev": "astro dev",
     "build": "astro build && pagefind --site dist && npm run check-build",
     "preview": "astro preview",
     "check": "astro check && npm run check-build",
     "check-build": "node scripts/check-build.mjs",
-    "publish": "npm run build && npm run check && wrangler deploy"
+    "publish": "npm run build && npm run check && wrangler deploy",
+    "prestart": "astro check",
+    "start": "astro dev"
   },
   "dependencies": {
     "@astrojs/mdx": "^8.0.1",

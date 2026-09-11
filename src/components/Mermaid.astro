@@ -1,9 +1,6 @@
 ---
-// Minimal Mermaid component (M2). Replaces the old raw `<pre class="mermaid">`
-// blocks. The diagram source is passed as a `code` string prop (not children)
-// so its `-->`, `{}` and `<>` syntax never hits the MDX parser. This renders the
-// standard `<pre class="mermaid">` target element; the client-side mermaid
-// script that turns it into an SVG is wired up in M4 (per the M1 notes).
+// Renders a pre element with class mermaid from a code string prop. The
+// client-side mermaid script (see Base.astro) turns it into an SVG.
 interface Props {
   code: string;
 }

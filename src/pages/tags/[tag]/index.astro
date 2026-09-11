@@ -1,6 +1,5 @@
 ---
-// Per-tag archive -> `/tags/<slug>/`. Index-style route so `preserve` emits a
-// directory with index.html (trailing-slash URL), matching the old site.
+// Per-tag archive, served at /tags/<slug>/.
 import ListLayout from '../../../layouts/ListLayout.astro';
 import PostList from '../../../components/PostList.astro';
 import { getSortedPosts } from '../../../utils/posts';

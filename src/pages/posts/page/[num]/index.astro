@@ -1,5 +1,5 @@
 ---
-// Posts-listing pagination 2..N -> `/posts/page/<num>/`. Page 1 is `/posts/`.
+// Posts-listing pagination 2..N, served at /posts/page/<num>/. Page 1 is /posts/.
 import ListLayout from '../../../../layouts/ListLayout.astro';
 import PostList from '../../../../components/PostList.astro';
 import { getSortedPosts, PER_PAGE } from '../../../../utils/posts';
@@ -14,10 +14,6 @@ export async function getStaticPaths() {
   return paths;
 }
 
-interface Props {
-  num: number;
-  totalPages: number;
-}
 const { num, totalPages } = Astro.props;
 const posts = await getSortedPosts();
 const pagePosts = posts.slice((num - 1) * PER_PAGE, num * PER_PAGE);
