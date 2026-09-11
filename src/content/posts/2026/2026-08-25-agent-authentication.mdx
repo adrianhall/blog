@@ -8,67 +8,102 @@ tags:
 mermaid: true
 ---
 
-import Mermaid from '../../../components/Mermaid.astro';
+import Mermaid from "../../../components/Mermaid.astro";
 
-I've spent a lot of time using [OpenCode] recently. Like most coding agents, it can connect to MCP servers, call APIs, create pull requests, deploy applications, and generally do useful work on my behalf. Every one of those actions needs to be authenticated.
+I've spent a lot of time using [OpenCode] recently. Like most coding agents, it can connect to MCP
+servers, call APIs, create pull requests, deploy applications, and generally do useful work on my
+behalf. Every one of those actions needs to be authenticated.
 
-Today, the authentication experience is mostly invisible. I sign in to the MCP server, or I give the agent an API key, and the agent gets on with the job. The service at the other end normally sees one of two things: me, or the API key. It does not see the agent acting for me.
+Today, that authentication experience is mostly invisible. I sign in to the MCP server, or I hand
+the agent an API key, and it gets on with the job. The service on the other end normally sees one of
+two things: me, or the API key. It never sees the agent acting for me.
 
-That's a problem. An agent is not merely a faster keyboard. It can make decisions, chain tools together, delegate work to other agents, and continue working after I have moved on to something else. If it uses my token, the downstream service cannot distinguish something I did from something the agent decided to do.
+An agent isn't just a faster keyboard. It can make decisions, chain tools together, delegate work
+to other agents, and keep working after I've moved on to something else. If it's using my token,
+the downstream service can't tell the difference between something I did and something the agent
+decided to do on its own.
 
 ![Authentication for agents acting on your behalf](/assets/images/2026/Aug25-banner.jpg)
 
-Until recently, identity systems did not have a good, widely deployed answer for this. That's changing. Okta, Microsoft, Ping Identity, AWS, and others are now shipping agent-aware identity products based on OAuth token exchange and related standards. Instead of pretending that the agent is the user, a token can say "this is agent X, acting for user Y."
-
-The token has two names in it.
+Until recently, identity systems didn't have a good, widely deployed answer for this. That's
+changing. Okta, Microsoft, Ping Identity, AWS, and others are now shipping agent-aware identity
+products built on OAuth token exchange and related standards. Instead of pretending the agent is the
+user, a token can now say "this is agent X, acting for user Y."
 
 ## The old agent authentication model
 
-Agent authentication has traditionally been considered along two dimensions. The first was where the agent ran. It could be local, like OpenCode or Claude Code, or it could run remotely as a hosted service. The second was who the agent was acting as. It could act as the user or use its own service identity.
+I've always thought about agent authentication along two dimensions. The first is where the agent
+runs. It could be local, like OpenCode or Claude Code, or it could run remotely as a hosted service.
+The second is who the agent acts as. It could act as me, or it could use its own service identity.
 
-| | Acting as the user | Acting as itself |
-| --- | --- | --- |
-| **Local agent** | User login, OAuth token, or local credentials | Rarely used |
-| **Remote agent** | User login or stored OAuth token | Service account or API key |
+|                  | Acting as the user                            | Acting as itself           |
+| ---------------- | ---------------------------------------------- | --------------------------- |
+| **Local agent**  | User login, OAuth token, or local credentials | Rarely used                |
+| **Remote agent** | User login or stored OAuth token              | Service account or API key |
 
-Local agents generally acted as the user because they were running on the user's machine. The agent could run `git`, use credentials already installed by a cloud CLI, or ask the user to sign in. There wasn't much demand for a separate local agent identity because the person and the process were treated as part of the same security boundary.
+Local agents generally act as the user because they're running on the user's machine. The agent can
+run `git`, use credentials a cloud CLI already installed, or ask me to sign in. There was never much
+demand for a separate local agent identity, because the person and the process were treated as part
+of the same security boundary.
 
-Remote agents had a more obvious identity problem. You either signed the hosted service in as the user, gave it an API key, or created a service account for it. The service account gave the agent an identity, but lost the relationship with the user. The downstream service knew that the agent did something, but not who it was working for.
+Remote agents had a more obvious identity problem. You either signed the hosted service in as the
+user, gave it an API key, or created a service account for it. The service account gave the agent an
+identity, but it lost the relationship with the user. The downstream service knew the agent did
+something, but not who it was working for.
 
-None of these options represent the actual relationship:
+None of these options capture the actual relationship:
 
 > Agent X is acting for Alice, within a limited set of permissions, to complete this task.
 
-This missing relationship is the important bit. Where the agent runs affects how you establish trust and protect credentials, but location isn't an identity. A process running on my laptop is not automatically me, and a process running in a data centre is not automatically independent of me.
+That missing relationship is the important bit. Where the agent runs affects how you establish trust
+and protect credentials, but location isn't an identity. A process running on my laptop isn't
+automatically me, and a process running in a data center isn't automatically independent of me.
 
 ## MCP authentication does not solve this
 
-[MCP authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization) allows an MCP client to obtain an OAuth token for a protected MCP server. The user is redirected to an authorization server, signs in, grants access, and the client receives a token. This is a huge improvement over putting an API key into a configuration file.
+[MCP authorization] lets an MCP client obtain an OAuth token for a protected MCP server. I get
+redirected to an authorization server, sign in, grant access, and the client receives a token.
+That's a huge improvement over dropping an API key into a configuration file.
 
-However, MCP only defines the authentication boundary between the MCP client and MCP server. It does not guarantee that the relationship survives the next hop.
+But MCP only defines the authentication boundary between the MCP client and MCP server. It doesn't
+guarantee that relationship survives the next hop.
 
-Imagine that OpenCode connects to a project-management MCP server. I sign in and grant it permission to read and update my tickets. The MCP server then obtains a separate token for the project-management API representing me. Unless that downstream token also identifies OpenCode as the actor, the final API sees me updating the ticket.
+Say OpenCode connects to a project-management MCP server. I sign in and grant it permission to read
+and update my tickets. The MCP server then obtains a separate token for the project-management API,
+representing me. Unless that downstream token also identifies OpenCode as the actor, the final API
+just sees me updating the ticket.
 
-The distinction between the two tokens is important. The MCP access token is intended for the MCP server and must not be forwarded to another API. The server needs a separate authorization flow or token exchange for the downstream resource.
+The distinction between the two tokens matters. The MCP access token is meant for the MCP server and
+shouldn't be forwarded to another API. The server needs a separate authorization flow or token
+exchange for the downstream resource.
 
-MCP is neither required for agent identity nor sufficient to provide it. It is one of the protocols the agent may use along the way.
+MCP is neither required for agent identity nor sufficient to provide it. It's just one of the
+protocols the agent might use along the way.
 
 ## Impersonation versus delegation
 
-OAuth has terminology for the difference. [RFC 8693](https://www.rfc-editor.org/rfc/rfc8693.html), published in 2020, defines OAuth 2.0 Token Exchange and distinguishes **impersonation** from **delegation**.
+OAuth actually has terminology for this difference. [RFC 8693] defines OAuth 2.0 token exchange and
+distinguishes **impersonation** from **delegation**.
 
-With RFC 8693 impersonation, the agent becomes the user within the permissions granted by the exchanged token. The resource sees Alice. It may know which OAuth client requested the token, but Alice remains the effective identity.
+With RFC 8693 impersonation, the agent becomes the user within whatever permissions the exchanged
+token grants. The resource sees Alice. It might know which OAuth client requested the token, but
+Alice remains the effective identity.
 
-Ordinary user-facing OAuth is also delegated authorization, not automatically impersonation. However, it commonly attributes the operation to the user and OAuth client without representing an autonomous agent as a separate actor. That is the visibility gap agent identity products are addressing.
+Ordinary user-facing OAuth is also delegated authorization, not automatically impersonation. But it
+usually attributes the operation to the user and OAuth client without representing an autonomous
+agent as a separate actor. That's the visibility gap agent identity products are trying to close.
 
-With delegation, the user remains the subject and the agent is recorded as the actor. The resource sees both identities. Alice delegated some of her authority to the agent, but the agent does not become Alice.
+With delegation, the user stays the subject and the agent gets recorded as the actor. The resource
+sees both identities. Alice delegated some of her authority to the agent, but the agent never
+becomes Alice.
 
 RFC 8693 defines two inputs to a token exchange:
 
-* The `subject_token` identifies the party on whose behalf the request is being made.
-* The optional `actor_token` identifies the party that will act on behalf of the subject.
+- The `subject_token` identifies the party on whose behalf the request is being made.
+- The optional `actor_token` identifies the party that will act on behalf of the subject.
 
-An authorization server validates the subject token and, when supplied, the actor token. It then applies policy and decides whether to issue a composite token for the target service.
+An authorization server validates the subject token and, when it's supplied, the actor token too. It
+then applies policy and decides whether to issue a composite token for the target service.
 
 <Mermaid code={`sequenceDiagram
     autonumber
@@ -85,6 +120,7 @@ An authorization server validates the subject token and, when supplied, the acto
     Agent->>API: Call API with delegated token
     API->>API: Authorize user and current actor
     API-->>Agent: Response
+
 `} />
 
 The resulting JWT might look like this:
@@ -101,9 +137,12 @@ The resulting JWT might look like this:
 }
 ```
 
-The top-level `sub` claim identifies Alice. The `act` claim identifies the agent currently acting for Alice. The API must validate `aud`, preventing it from accepting a token intended for a different service, while `scope` limits what the agent can do.
+The top-level `sub` claim identifies Alice. The `act` claim identifies the agent currently acting
+for Alice. The API has to validate `aud`, so it doesn't accept a token meant for a different
+service, while `scope` limits what the agent can actually do.
 
-Delegation can also form a chain. If an orchestrator invokes a specialist agent, the outermost `act` represents the current actor and the nested claim records the previous actor:
+Delegation can also form a chain. If an orchestrator invokes a specialist agent, the outermost `act`
+represents the current actor and the nested claim records the previous one:
 
 ```json
 {
@@ -117,40 +156,60 @@ Delegation can also form a chain. If an orchestrator invokes a specialist agent,
 }
 ```
 
-The history is useful for audit, but RFC 8693 says only the current actor should be used for access-control decisions. Otherwise, an old actor buried in the chain could unexpectedly affect the permissions of the current request.
+The history is useful for audit, but RFC 8693 says only the current actor should drive
+access-control decisions. Otherwise an old actor buried in the chain could unexpectedly affect the
+permissions of the current request.
 
 ## OAuth could already do this
 
-There is an important point here. Agent delegation is not a new OAuth capability. RFC 8693 was published before the current generation of coding agents existed. OAuth access tokens have also identified their client using claims such as `client_id`, `azp`, or `appid` for years.
+Here's an important point: agent delegation isn't a new OAuth capability. RFC 8693 was published
+before this generation of coding agents even existed. OAuth access tokens have identified their
+client using claims like `client_id`, `azp`, or `appid` for years. What changed is the product
+model.
 
-What changed is the product model.
+Identity providers are turning agents into managed identities with owners, lifecycle controls,
+consent, policy, and an audit trail. Token exchange is becoming a supported configuration instead of
+some custom Security Token Service every enterprise has to build for itself. Downstream services are
+also waking up to the fact that an OAuth client might be an autonomous actor rather than a
+traditional web app following direct user clicks.
 
-Identity providers are turning agents into managed identities with owners, lifecycle controls, consent, policy, and an audit trail. Token exchange is becoming a supported configuration rather than some custom Security Token Service that every enterprise has to build for itself. Downstream services are also becoming aware that an OAuth client may be an autonomous actor rather than a traditional Web application following direct user clicks.
-
-The standards existed. The agent-shaped configuration and policy did not.
+The standards were already there. The agent-shaped configuration and policy weren't.
 
 ## Cross-App Access and ID-JAG
 
-[Cross-App Access](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04), normally shortened to XAA, builds on OAuth token exchange. It allows an application to obtain access to another application's API by coordinating through an identity provider that both applications already trust for single sign-on.
+[Cross-App Access], usually shortened to XAA, builds on OAuth token exchange. It lets an application
+obtain access to another application's API by coordinating through an identity provider both
+applications already trust for single sign-on. The mechanism uses an Identity Assertion JWT
+Authorization Grant, or **ID-JAG**. The name's a mouthful, but the idea is straightforward:
 
-The mechanism uses an Identity Assertion JWT Authorization Grant, or **ID-JAG**. The name is a mouthful, but the idea is straightforward:
-
-1. The user signs in to the agentic application through their normal identity provider.
-2. The application exchanges the user's identity token for an ID-JAG intended for another authorization server.
+1. I sign in to the agentic application through my normal identity provider.
+2. The application exchanges my identity token for an ID-JAG intended for another authorization server.
 3. The application presents the ID-JAG to that authorization server.
-4. The second authorization server applies its own policy and issues an access token for its API.
+4. That second authorization server applies its own policy and issues an access token for its API.
 
-An ID-JAG is not normally the token sent to the final API. It is a short-lived, signed authorization grant used to obtain that token. Its JWT header uses `oauth-id-jag+jwt` as the token type, and its claims can include the user in `sub`, the acting application in `client_id`, the target authorization server in `aud`, and requested permissions in `scope` or `authorization_details`.
+An ID-JAG isn't normally the token sent to the final API. It's a short-lived, signed authorization
+grant used to obtain that token. Its JWT header uses `oauth-id-jag+jwt` as the token type, and its
+claims can include the user in `sub`, the acting application in `client_id`, the target
+authorization server in `aud`, and requested permissions in `scope` or `authorization_details`.
 
-The `authorization_details` claim comes from [Rich Authorization Requests](https://www.rfc-editor.org/rfc/rfc9396.html). Instead of asking for a vague scope like `payments.write`, an agent can request a structured permission for a particular operation, account, or amount. This is much closer to the sort of task-shaped permission an agent actually needs.
+The `authorization_details` claim comes from [Rich Authorization Requests]. Instead of asking for a
+vague scope like `payments.write`, an agent can request a structured permission for a particular
+operation, account, or amount. That's much closer to the task-shaped permission an agent actually
+needs.
 
-XAA is still an Internet-Draft, and its current actor-token processing is not fully normative. Don't read "there is a draft" as "every product is interoperable." The products use the same building blocks, but their token shapes and configuration models still differ.
+XAA is still an Internet-Draft, and its current actor-token processing isn't fully normative. Don't
+read "there's a draft" as "every product is interoperable." The products use the same building
+blocks, but their token shapes and configuration models still differ.
 
 ## SPIFFE identifies the running workload
 
-There is another identity involved. OAuth can identify the user and logical agent, but how does the authorization server know that the expected agent software is presenting the actor credential?
+There's another identity involved here. OAuth can identify the user and the logical agent, but how
+does the authorization server know the expected agent software is the one presenting the actor
+credential?
 
-[SPIFFE](https://spiffe.io/docs/latest/spiffe-about/overview/) provides workload identity. A SPIFFE implementation such as [SPIRE](https://spiffe.io/docs/latest/spire-about/) attests a running workload and issues a short-lived SPIFFE Verifiable Identity Document, or SVID. The workload does not need a static client secret deployed alongside it.
+[SPIFFE] provides workload identity. A SPIFFE implementation such as [SPIRE] attests a running
+workload and issues a short-lived SPIFFE Verifiable Identity Document, or SVID. The workload doesn't
+need a static client secret deployed alongside it.
 
 A SPIFFE ID looks like this:
 
@@ -158,101 +217,184 @@ A SPIFFE ID looks like this:
 spiffe://example.com/agents/reconciliation
 ```
 
-The identity can be represented by an X.509-SVID for mutual TLS or a JWT-SVID where JWT authentication is required. The credentials are short-lived and automatically rotated through the SPIFFE Workload API.
+The identity can be represented by an X.509-SVID for mutual TLS or a JWT-SVID where JWT
+authentication is required. The credentials are short-lived and rotate automatically through the
+SPIFFE Workload API.
 
-SPIFFE does not identify the user, grant permissions, or describe the task. It answers a different question: **which attested workload is running this agent?**
+SPIFFE doesn't identify the user, grant permissions, or describe the task. It answers a different
+question: **which attested workload is running this agent?**
 
-This gives us four useful identity layers:
+That gives me four useful identity layers to think about:
 
-| Layer | Question | Typical mechanism |
-| --- | --- | --- |
-| **User** | Whose authority is involved? | OIDC or OAuth user token |
-| **Agent** | Which logical agent is acting? | OAuth client or managed agent identity |
-| **Workload** | Which running software holds the credential? | SPIFFE and SVIDs |
-| **Task** | What particular run was authorized? | Task or run identifier, constrained by scopes or RAR |
+| Layer        | Question                                     | Typical mechanism                                    |
+| ------------ | --------------------------------------------- | ----------------------------------------------------- |
+| **User**     | Whose authority is involved?                 | OIDC or OAuth user token                             |
+| **Agent**    | Which logical agent is acting?               | OAuth client or managed agent identity               |
+| **Workload** | Which running software holds the credential? | SPIFFE and SVIDs                                     |
+| **Task**     | What particular run was authorized?          | Task or run identifier, constrained by scopes or RAR |
 
-A JWT-SVID could be used as an actor credential if the authorization server trusts the SPIFFE trust domain and supports that exchange. An X.509-SVID could authenticate the OAuth client using mutual TLS and bind the resulting token to the certificate. Neither integration happens automatically, and the commercial identity providers do not all accept SVIDs as agent credentials out of the box.
+A JWT-SVID could work as an actor credential if the authorization server trusts the SPIFFE trust
+domain and supports that exchange. An X.509-SVID could authenticate the OAuth client using mutual
+TLS and bind the resulting token to the certificate. Neither integration happens automatically,
+though, and the commercial identity providers don't all accept SVIDs as agent credentials out of the
+box.
 
-SPIFFE is most useful for remote agents running in Kubernetes, virtual machines, or other managed infrastructure. It is harder to apply to a local OpenCode process on an arbitrary laptop. Someone still has to operate the SPIFFE trust domain and reliably attest that the local process is the expected harness rather than malicious software running as the same user.
+SPIFFE is most useful for remote agents running in Kubernetes, virtual machines, or other managed
+infrastructure. It's harder to apply to a local OpenCode process on an arbitrary laptop. Someone
+still has to operate the SPIFFE trust domain and reliably attest that the local process is the
+expected harness rather than malicious software running as the same user.
 
 ## What can you configure today?
 
-The major identity vendors have arrived at similar concepts through different products and token formats.
+The major identity vendors have all landed on similar concepts, just through different products and
+token formats. Here's where each of them stands.
 
 ### Okta for AI Agents
 
-[Okta for AI Agents](https://developer.okta.com/docs/guides/okta-for-ai-agents/) uses token exchange and Cross-App Access to secure third-party agents with delegated user identity. Okta documents a two-step flow in which the user's identity is exchanged for an ID-JAG at the Okta organization authorization server, then exchanged again at the resource authorization server for a short-lived, scoped access token.
+[Okta for AI Agents] uses token exchange and Cross-App Access to secure third-party agents with
+delegated user identity. Okta documents a two-step flow where my identity gets exchanged for an
+ID-JAG at the Okta organization authorization server, then exchanged again at the resource
+authorization server for a short-lived, scoped access token.
 
-Okta also supports agent-to-agent connections. The actor chain can record an agent handing work to another agent without losing the original subject. Agents are managed identities rather than anonymous processes holding an API key.
+Okta also supports agent-to-agent connections. The actor chain can record an agent handing work to
+another agent without losing the original subject. Agents are managed identities here, not anonymous
+processes holding an API key.
 
 ### Microsoft Entra Agent ID
 
-[Microsoft Entra Agent ID](https://learn.microsoft.com/en-us/entra/agent-id/) provides agent identities for both autonomous and interactive agents. Entra uses its OAuth on-behalf-of flow, based on the JWT bearer grant in RFC 7523, rather than the RFC 8693 exchange shown above.
+[Microsoft Entra Agent ID] provides agent identities for both autonomous and interactive agents.
+Entra uses its OAuth on-behalf-of flow, based on the JWT bearer grant in RFC 7523, rather than the
+RFC 8693 exchange I described above.
 
-In an on-behalf-of token, `sub` and `oid` identify the human user while `appid` or `azp` identifies the agent application. The `idtyp` claim is `user` for an interactive agent acting for a user and `app` for an autonomous agent represented by a service principal. Entra also adds agent-specific `xms_*` facet and relationship claims for policy and attribution. Microsoft publishes a useful [agent token claims reference](https://learn.microsoft.com/en-us/entra/agent-id/agent-token-claims) with examples of each flow.
+In an on-behalf-of token, `sub` and `oid` identify the human user while `appid` or `azp` identifies
+the agent application. The `idtyp` claim is `user` for an interactive agent acting for a user and
+`app` for an autonomous agent represented by a service principal. Entra also adds agent-specific
+`xms_*` facet and relationship claims for policy and attribution. Microsoft publishes a useful
+[agent token claims reference] with examples of each flow.
 
-The wire protocol and claims differ, but the useful outcome is similar: the resource can distinguish the user from the agent application making the request.
+The wire protocol and claims differ, but the useful outcome is the same: the resource can
+distinguish the user from the agent application making the request.
 
 ### Ping Identity
 
-[PingOne Advanced Identity Cloud](https://docs.pingidentity.com/pingoneaic/am-oauth2/token-exchange.html) supports on-behalf-of agent flows using RFC 8693 token exchange. The user is represented by the subject token, the agent by the actor token, and Advanced Identity Cloud adds `act` and `may_act` claims when relevant. The `may_act` claim constrains which agent is allowed to act for a subject.
+[PingOne Advanced Identity Cloud] supports on-behalf-of agent flows using RFC 8693 token exchange.
+The user is represented by the subject token, the agent by the actor token, and Advanced Identity
+Cloud adds `act` and `may_act` claims when relevant. The `may_act` claim constrains which agent is
+allowed to act for a subject.
 
-This is an important policy check. Merely possessing Alice's token and an agent token should not mean that any agent can combine them. The authorization server must decide whether that particular actor is permitted to receive delegated authority from that particular subject.
+That's an important policy check. Just possessing Alice's token and an agent token shouldn't mean
+any agent can combine them. The authorization server has to decide whether that particular actor is
+permitted to receive delegated authority from that particular subject.
 
 ### Amazon Bedrock AgentCore Identity
 
-[Amazon Bedrock AgentCore Identity](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/on-behalf-of-token-exchange.html) supports on-behalf-of token exchange for agents that need to call downstream services for an authenticated user. AgentCore acts as a credential broker: it holds the delegate client credentials and performs an RFC 8693 token exchange or RFC 7523 JWT bearer exchange against the tenant's authorization server, depending on the identity provider.
+[Amazon Bedrock AgentCore Identity] supports on-behalf-of token exchange for agents that need to
+call downstream services for an authenticated user. AgentCore acts as a credential broker: it holds
+the delegate client credentials and performs an RFC 8693 token exchange or RFC 7523 JWT bearer
+exchange against the tenant's authorization server, depending on the identity provider.
 
-AgentCore is slightly different from Okta or Entra because it is normally orchestrating an exchange with an external identity provider rather than defining one universal downstream token format. The final claims depend on the authorization server involved.
+AgentCore is a bit different from Okta or Entra, because it's normally orchestrating an exchange
+with an external identity provider rather than defining one universal downstream token format. The
+final claims depend on whichever authorization server is involved.
 
 ### Cloudflare's Agent Access Model
 
-Cloudflare has proposed an [Agent Access Model](https://blog.cloudflare.com/the-agent-access-model/) with an Agent Identity Broker that issues short-lived, task-scoped, sender-constrained credentials. It combines identity with harness and network enforcement, a one-way reduction in capabilities called the Trust Ratchet, and an agent activity log.
+Cloudflare has proposed an [Agent Access Model] with an Agent Identity Broker that issues
+short-lived, task-scoped, sender-constrained credentials. It combines identity with harness and
+network enforcement, a one-way reduction in capabilities called the Trust Ratchet, and an agent
+activity log.
 
-This is not currently the same sort of configurable agent identity product as Okta for AI Agents or Entra Agent ID. It is a reference architecture showing how existing primitives such as RFC 8693 and [DPoP](https://www.rfc-editor.org/rfc/rfc9449.html) can fit into a broader agent security model.
+This isn't currently the same sort of configurable agent identity product as Okta for AI Agents or
+Entra Agent ID. It's a reference architecture showing how existing primitives like RFC 8693 and
+[DPoP] can fit into a broader agent security model.
 
-The distinction matters. A correctly shaped token is useful, but it does not stop an agent bypassing the tool harness, opening a direct network connection, or sending sensitive data to an otherwise permitted destination. Authentication is one control in an agent security architecture, not the entire architecture.
+That distinction matters. A correctly shaped token is useful, but it doesn't stop an agent from
+bypassing the tool harness, opening a direct network connection, or sending sensitive data to an
+otherwise permitted destination. Authentication is one control in an agent security architecture,
+not the entire architecture.
 
 ## Reduced permissions are not automatic
 
-Putting `act` into a token does not make the token safe. The authorization server and protected API must actually use the claims when making policy decisions.
+Putting `act` into a token doesn't make the token safe on its own. The authorization server and
+protected API actually have to use those claims when making policy decisions.
 
 The effective permissions should be the intersection of:
 
-* What the user is allowed to do.
-* What the agent is allowed to do.
-* What the user delegated for this task.
-* What the resource owner permits.
-* What the current risk and access policy allows.
+- What the user is allowed to do.
+- What the agent is allowed to do.
+- What the user delegated for this task.
+- What the resource owner permits.
+- What the current risk and access policy allows.
 
-If Alice can administer every repository but the code-review agent only needs to read one pull request, the resulting token should only permit that read. The agent should not inherit all of Alice's permissions simply because she initiated the task.
+If I can administer every repository but my code-review agent only needs to read one pull request,
+the resulting token should only permit that read. The agent shouldn't inherit all of my permissions
+just because I kicked off the task.
 
-The token must also be short-lived and restricted to its intended audience. Bearer tokens can be replayed by anyone who steals them. DPoP or mutual TLS can sender-constrain a token so that possession of the token alone is not enough, but neither proves that the model followed its prompt or that a tool call matched the user's intent.
+The token also needs to be short-lived and restricted to its intended audience. Bearer tokens can be
+replayed by anyone who steals them. DPoP or mutual TLS can sender-constrain a token so possession
+alone isn't enough, but neither one proves the model followed its prompt or that a tool call matched
+my actual intent.
 
 The prompt is not an authorization policy.
 
 ## Local agents are next
 
-The current products are naturally aimed at enterprise and remotely hosted agents. The identity provider can register the agent, the platform can protect its private key, and administrators can assign owners and policy. A local coding harness is more difficult because it runs on a machine the identity provider does not control.
+The current products are naturally aimed at enterprise and remotely hosted agents. The identity
+provider can register the agent, the platform can protect its private key, and administrators can
+assign owners and policy. A local coding harness is harder, because it's running on a machine the
+identity provider doesn't control. Still, I don't think it'll be long before agentic harnesses
+like [OpenCode] and [Pi] support agent identity too.
 
-However, it won't be long before agentic harnesses like OpenCode and [Pi](https://github.com/badlogic/pi-mono) support agent identity as well.
+The harness could generate a key for each installation or task and register itself as a public OAuth
+client. I'd sign in normally, while the harness proves possession of its own key. The identity
+provider could then issue a short-lived token identifying both me and the harness, restricted to the
+current task and protected with DPoP.
 
-The harness could generate a key for each installation or task and register itself as a public OAuth client. The user would sign in normally, while the harness proves possession of its own key. The identity provider could then issue a short-lived token identifying both the user and harness, restricted to the current task and protected with DPoP.
+MCP servers and direct APIs would receive the same delegated identity. A tool call could get logged
+as "OpenCode acting for Alice" instead of just "Alice." If OpenCode delegated a security review to
+another agent, the actor chain could preserve that relationship too.
 
-MCP servers and direct APIs would receive the same delegated identity. A tool call could be logged as "OpenCode acting for Alice" rather than simply "Alice." If OpenCode delegated a security review to another agent, the actor chain could preserve that relationship too.
+There are still hard problems here. Dynamic client registration has to be controlled. A locally
+generated key proves continuity of an installation, not that the process is uncompromised.
+Enterprise device posture or workload attestation might be needed for higher-risk operations.
+Downstream APIs also have to understand the claims and apply different policy to agents.
 
-There are still hard problems. Dynamic client registration has to be controlled. A locally generated key proves continuity of an installation, not that the process is uncompromised. Enterprise device posture or workload attestation may be needed for higher-risk operations. Downstream APIs must also understand the claims and apply different policy to agents.
-
-None of these are reasons to keep giving the agent the user's credentials. They are the implementation work required to stop doing it.
+None of that is a reason to keep giving the agent my credentials, though. It's just the
+implementation work required to stop doing it.
 
 ## Final thoughts
 
-The most important change in agent authentication is visibility. We can finally represent what is actually happening: a software actor is exercising a limited part of a person's authority.
+The most important change in agent authentication is visibility. We can finally represent what's
+actually happening: a software actor exercising a limited slice of a person's authority.
 
-OAuth token exchange and on-behalf-of flows provide the delegation. ID-JAG and Cross-App Access extend token exchange across application trust boundaries. SPIFFE can establish the identity of the running workload. Agent-aware identity products add lifecycle, consent, ownership, policy, and audit. Task-scoped authorization and enforcement still have to be built around them.
+OAuth token exchange and on-behalf-of flows provide the delegation. ID-JAG and Cross-App Access
+extend token exchange across application trust boundaries. SPIFFE can establish the identity of the
+running workload. Agent-aware identity products add lifecycle, consent, ownership, policy, and
+audit. I still have to build task-scoped authorization and enforcement around all of it myself.
 
-The old model made the agent disappear into either the user's identity or an API key. That is no longer good enough. When an agent reads a document, changes a ticket, deploys code, or spends money, the resource should be able to answer two questions: who was this for, and which agent did it?
+The old model made the agent disappear into either the user's identity or an API key. That's no
+longer good enough. When my agent reads a document, changes a ticket, deploys code, or spends money,
+the resource should be able to answer two questions: who was this for, and which agent did it?
 
-An agent should receive bounded, short-lived, delegated authority for a specific task. It should **NEVER** inherit a person's durable credentials.
+An agent should receive bounded, short-lived, delegated authority for a specific task. It should
+**NEVER** inherit a person's durable credentials.
+
+And, finally, identity is hard and agents only make it harder.  However, identity is one of those
+baseline capabilities that every enterprise HAS to get right.  If you don't have a good identity
+model, you don't have a good security model.
 
 [OpenCode]: https://opencode.ai
+[RFC 8693]: https://www.rfc-editor.org/rfc/rfc8693.html
+[MCP authorization]: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization
+[Cross-App Access]: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04
+[Rich Authorization Requests]: https://www.rfc-editor.org/rfc/rfc9396.html
+[SPIFFE]: https://spiffe.io/docs/latest/spiffe-about/overview/
+[SPIRE]: https://spiffe.io/docs/latest/spire-about/
+[Okta for AI Agents]: https://developer.okta.com/docs/guides/okta-for-ai-agents/
+[Microsoft Entra Agent ID]: https://learn.microsoft.com/en-us/entra/agent-id/
+[agent token claims reference]: https://learn.microsoft.com/en-us/entra/agent-id/agent-token-claims
+[PingOne Advanced Identity Cloud]: https://docs.pingidentity.com/pingoneaic/am-oauth2/token-exchange.html
+[Amazon Bedrock AgentCore Identity]: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/on-behalf-of-token-exchange.html
+[Agent Access Model]: https://blog.cloudflare.com/the-agent-access-model/
+[DPoP]: https://www.rfc-editor.org/rfc/rfc9449.html
+[Pi]: https://pi.dev/
