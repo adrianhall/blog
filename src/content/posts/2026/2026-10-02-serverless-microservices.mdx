@@ -1,0 +1,279 @@
+---
+title: "Building Serverless Microservices with Cloudflare"
+date: 2026-10-02
+categories:
+  - Cloudflare
+tags:
+  - software-architecture
+mermaid: true
+---
+
+import Mermaid from "../../../components/Mermaid.astro";
+
+Cloudflare recently introduced [Cloudflare OS], which is a new agentic platform that allows an enterprise to give non-technical employees an AI workspace that is fully integrated with their internal systems.  This is a huge step forward in the enterprise AI space, and it opens up a lot of new possibilities for how we can build software.
+
+One of the architectural patterns that stood out was the use of **gatekeepers**. These are Workers that wrap access to another service and are only available to other Workers through RPC. There is no public API. If a Worker doesn't have the right binding, it can't call the gatekeeper.
+
+That sounds an awful lot like a microservice.
+
+![Building Serverless Microservices](/assets/images/2026/Oct02-banner.jpg)
+
+
+I've worked with microservices for long enough to be cautious about that word. Microservices can provide useful separation between teams and systems, but they can also turn a perfectly understandable application into a distributed system with twelve deployments, fifteen dashboards, and a service mesh before anyone has acquired their first customer.
+
+Cloudflare Workers change some of the economics. A Worker is cheap to deploy, scales without a server fleet, and can call another Worker through a [Service Binding] using [Workers RPC]. There is no public URL, API key, load balancer, or service discovery mechanism to maintain. The platform handles that part.
+
+So, are Workers a good way to build microservices in a serverless world? Yes, but that doesn't mean every function deserves its own Worker.
+
+## What is a Worker microservice?
+
+A traditional microservice is an independently deployed service that owns a bounded business capability. It normally exposes an HTTP or messaging API, owns some data, and can be operated separately from the rest of the application.
+
+A Worker microservice follows the same idea, but the internal interface can be RPC instead of HTTP:
+
+<Mermaid code={`
+flowchart TD
+    User[Browser or agent] --> App[Application Worker]
+    App -->|RPC| Customer[Customer service]
+    App -->|RPC| Billing[Billing gatekeeper]
+    App -->|RPC| Search[Search service]
+`} />
+
+The application Worker is public and has an HTTP endpoint. The other Workers don't need to be. They extend `WorkerEntrypoint`, publish a small set of methods, and are attached to the caller using [Service Bindings].
+
+It is worth distinguishing an RPC Worker from a [Durable Object]. A Durable Object is a stateful, single-threaded virtual actor. Once an object is created, it is assigned to one place, and every request for that object is routed there. It also has its own durable storage, which makes it useful when I need ordering, coordination, or state that belongs to one logical object.
+
+An ordinary Worker is stateless.  Each request is handled by a separate thread. Cloudflare can run many instances concurrently and place them where requests need to be handled. That makes a Worker the better default for a stateless service that should scale out, while a Durable Object is the better choice when the service needs a stable home, serialized access, and persistent state.
+
+The word "RPC" makes this sound more complicated than it is. The calling Worker invokes a method and awaits the result:
+
+```typescript
+const customer = await env.CUSTOMERS.getCustomer(context, customerId);
+```
+
+The important detail is that `getCustomer()` runs in another Worker. It looks like a local method call, but it is still a distributed system boundary. The call can fail, the service can return an error, and a chain of calls can add latency.
+
+Service Bindings remove a lot of infrastructure. They do not remove the rules of distributed systems.
+
+## Why this model is interesting
+
+There are four benefits to this model that make it interesting:
+
+1. The service isn't exposed to the Internet. A conventional internal HTTP service still needs an
+   endpoint, authentication, routing, and protection. With a Service Binding, the binding itself is a 
+   capability. A Worker can only call the service if the binding has been added to its configuration.
+
+   That is an incredibly useful security boundary. A Salesforce gatekeeper can hold the Salesforce 
+   credentials and expose methods like `findAccount()` or `updateOpportunity()`. The application Worker 
+   never sees the Salesforce token and cannot make arbitrary Salesforce requests. It can only use the 
+   operations the gatekeeper provides.
+
+2. Wrapping a service in a Worker provides consistency. If five applications use the same customer data, 
+   I don't want five implementations of authorization, tenant filtering, validation, and audit logging.
+   I  want one service that owns those rules.
+
+3. Workers are independently deployable. I can update the customer service without redeploying every 
+   application that calls it. I can also give the service its own database, Durable Object namespace, KV 
+   namespace, R2 bucket, or external system binding. The caller doesn't need to know how the data is 
+   stored.
+
+4. The operational overhead is much lower than the microservice platforms I've used in the past. I don't 
+   need Kubernetes, an ingress controller, a service mesh, or a container registry just to separate two 
+   capabilities. I still need logging, tracing, tests, and sensible deployment practices, but I am not 
+   paying for a collection of idle servers.
+
+## A small customer service
+
+Let's look at a deliberately small example. I have a customer service with five operations that mirror the normal "CRUDL" operations for a customer record:
+
+- Create a customer.
+- Get a customer.
+- Update a customer.
+- Delete a customer.
+- List customers.
+
+I don't want to expose a generic database service with methods like `runSql()` or `updateTable()`. That would leak the storage model and let every caller invent its own rules. The RPC interface should describe the business capability, not the database underneath it.
+
+```typescript
+import { WorkerEntrypoint } from "cloudflare:workers";
+
+export default class CustomerService extends WorkerEntrypoint<Env> {
+  async createCustomer(context: RequestContext, input: CreateCustomer) {
+    await this.authorize(context, "customer:create", input.tenantId);
+    return createCustomerRecord(input); // Data implementation intentionally omitted.
+  }
+
+  async getCustomer(context: RequestContext, customerId: string) {
+    await this.authorize(context, "customer:read", customerId);
+    return getCustomerRecord(customerId); // Data implementation intentionally omitted.
+  }
+
+  async updateCustomer(context: RequestContext, command: UpdateCustomer) {
+    await this.authorize(context, "customer:update", command.customerId);
+    return updateCustomerRecord(command); // Data implementation intentionally omitted.
+  }
+
+  async deleteCustomer(context: RequestContext, customerId: string) {
+    await this.authorize(context, "customer:delete", customerId);
+    return deleteCustomerRecord(customerId); // Data implementation intentionally omitted.
+  }
+
+  async listCustomers(context: RequestContext, query: CustomerQuery) {
+    const decision = await this.authorize(context, "customer:list", query.tenantId);
+    return listCustomerRecords(query, decision.constraints); // Implementation omitted.
+  }
+
+  private async authorize(
+    context: RequestContext,
+    action: string,
+    resource: string
+  ) {
+    const decision = await this.env.POLICY.authorize({ context, action, resource });
+
+    if (!decision.allowed) {
+      throw new Error("Not authorized");
+    }
+
+    return decision;
+  }
+}
+```
+
+I've intentionally hidden all the data access. It could be [D1], a Durable Object, PostgreSQL through [Hyperdrive], or an external SaaS API. None of that changes the interface seen by the application Worker.
+
+The calling Worker receives a `CUSTOMERS` binding and calls the service:
+
+```typescript
+const result = await env.CUSTOMERS.updateCustomer(context, {
+  customerId: "customer-123",
+  expectedVersion: 7,
+  name: "Contoso"
+});
+```
+
+I included `expectedVersion` because retries and concurrent updates still exist in serverless systems. The customer service can reject an update if someone else has already changed version `7`. Similarly, a create operation should normally include an idempotency key so a retry doesn't create two customers.
+
+RPC makes remote code look local. It does not make network failure or concurrency disappear.
+
+## The policy Worker
+
+The policy Worker is the part of this architecture I find most useful. Authentication tells me who is making the request. Policy decides whether that identity can perform a particular action on a particular resource.
+
+The public application Worker should validate the identity first. If I'm using Cloudflare Access, that means cryptographically validating the Access JWT, including the issuer, audience, signature, and expiration. The application can then create a request context containing the user identity, tenant, request ID, and relevant claims.
+
+That context travels with the RPC call:
+
+```typescript
+const context = {
+  subject: identity.subject,
+  email: identity.email,
+  requestId: crypto.randomUUID()
+};
+```
+
+I don't want every application to make up its own interpretation of roles. The customer service sends the context, requested action, and resource to the policy Worker:
+
+```typescript
+const decision = await env.POLICY.authorize({
+  context,
+  action: "customer:update",
+  resource: "customer-123"
+});
+```
+
+The policy Worker returns a decision:
+
+```json
+{
+  allowed: true,
+  constraints: {
+    fields: ["name", "status"]
+  }
+}
+```
+
+A boolean is sometimes enough, but constraints are more useful. The user may be allowed to list customers, but not sensitive data like their phone number. They may be allowed to update a customer, but not billing status. The service applies those constraints while performing the operation.
+
+There are two important security rules here.
+
+1. Don't trust identity fields merely because they arrived in an object called `context`. Only trusted 
+   Workers should receive the customer-service binding, and the original identity token should be 
+   validated before it is converted into that context. For higher-risk systems, pass a short-lived 
+   signed identity envelope that the policy Worker can verify itself.
+
+2. Policy enforcement belongs next to the protected operation. If the public application Worker checks 
+   policy and the customer service blindly trusts the caller, another bound Worker may accidentally 
+   bypass the check. In this example, the customer service Worker calls the policy Worker itself, so
+   it is the enforcement point. The policy Worker is the decision point.
+
+This split also produces a useful audit trail. The policy Worker can record who requested what, which policy matched, and why the request was allowed or denied. The customer service can record what actually changed. Use the same request ID in both places and you can follow the operation without logging sensitive data.
+
+## When I would use this pattern
+
+I would create an RPC Worker when it represents a real security, ownership, or operational boundary.
+
+- A gatekeeper around an external system is an excellent example. The gatekeeper owns the credentials, rate limits, audit rules, and the allowed subset of the upstream API. Applications receive business operations, not a generic proxy.
+
+- A shared business capability is another good example. Customer records, entitlements, billing, search, or notification delivery may be used by several applications. Centralizing the rules prevents each application from developing a slightly different version.
+
+I would also use a separate Worker when the capability has a different deployment cadence or failure mode. A slow search system shouldn't necessarily take down customer updates. An integration with a rate-limited third-party API may need its own queue and retry policy. Separate Workers also make sense when different teams own the capabilities. An RPC contract gives the teams a boundary without forcing them to operate a conventional internal HTTP platform.
+
+There is also a pragmatic reason to split a service out: the main Worker has become too big. The 64 MiB Worker size limit is massive, but it is not unlimited. A large application can accumulate SDKs, generated clients, validation schemas, and integrations until the bundle becomes difficult to deploy, test, and reason about—or simply approaches the platform limit. Moving one cohesive capability into an RPC Worker gives it a separate bundle and a separate limit. I would not use this as an excuse to scatter arbitrary functions across dozens of Workers, though. The extracted code should still represent a capability with a small, stable contract.
+
+## When I would not use it
+
+I wouldn't split an application merely because I can. If two pieces of code always change together, use the same data, have the same security requirements, and are owned by the same team, putting them in separate Workers probably adds more complexity than value. A module boundary is cheaper than a service boundary.
+
+I also wouldn't create one Worker per database table. Tables are storage details, not necessarily business capabilities. A customer capability may involve customer records, addresses, contacts, preferences, and audit history. Splitting those into separate services creates distributed transactions and a lot of chatty RPC calls.
+
+A chain of tiny services is another warning sign:
+
+```text
+API -> Customer service -> Address service -> Validation service -> Audit service
+```
+
+Every arrow is a failure and latency boundary. If those calls must always happen in sequence for one operation, they probably belong together. Where calls are genuinely independent, run them in parallel. Where work doesn't need to finish before the response, use a Queue or Workflow.
+
+I wouldn't use RPC Workers as a way to avoid deciding who owns the data either. If four services all have direct access to the same tables, I have distributed the code without establishing a service boundary. The service that owns a capability should normally own the only binding that can manipulate its data.
+
+Don't use a policy Worker to turn every trivial operation into a long chain of remote decisions. Stable, low-risk policy can sometimes be represented by separate named entrypoints or bindings. An admin application can receive an administrative entrypoint while a user application receives a narrower one. Binding possession is already a useful coarse-grained capability. The policy Worker is for the finer-grained decisions involving users, tenants, resources, and actions.
+
+## The trade-offs haven't disappeared
+
+The serverless implementation removes servers. It doesn't remove microservice complexity. 
+
+- **Versioning**: A caller and a service may be deployed independently, and the service may change its
+  interface. A caller that expects `getCustomer()` to return a `Customer` object with a `name` field 
+  will break if the service changes it to `fullName`. The service must maintain backward compatibility 
+  or provide a versioned interface.
+
+- **Observability**:  Each service should log its operations, errors, and performance metrics. 
+  Distributed tracing can help track requests across services. A friendly RPC method name doesn't help 
+  when production says "something failed somewhere."
+
+- **Failure modes**:  The service may be down, slow, or return an error. The caller must handle those 
+  failures gracefully. A retry may be appropriate, but it can also cause cascading failures if not done 
+  carefully. Creates need idempotency. Updates need optimistic concurrency. Retries need limits and 
+  backoff. Long-running work belongs on a Queue or in a Workflow rather than inside a deep synchronous 
+  RPC chain.
+
+- **Platform coupling**:  Workers RPC is far nicer than building internal HTTP plumbing, but it isn't a 
+  portable interface I can move unchanged to another cloud. I think that trade-off is often worthwhile. 
+  Portability has a cost too, and I don't want to recreate a less capable version of the platform just 
+  in case I leave it.
+
+## Final thoughts
+
+Cloudflare Workers and Service Bindings provide a very compelling microservice architecture. The services can be private, independently deployed, strongly isolated, and cheap when idle. RPC removes a lot of the boilerplate that normally surrounds internal service communication.
+
+My rule is simple: create a Worker boundary when I need a security boundary, an ownership boundary, or an independent operational boundary. Otherwise, I use a module.
+
+Serverless makes microservices easier to operate. It doesn't make them free, and it certainly doesn't make them mandatory.
+
+[Cloudflare OS]: https://os.cloudflare.app/
+[Service Binding]: https://developers.cloudflare.com/workers/runtime-apis/service-bindings/
+[Service Bindings]: https://developers.cloudflare.com/workers/runtime-apis/service-bindings/
+[Workers RPC]: https://developers.cloudflare.com/workers/runtime-apis/rpc/
+[Durable Object]: https://developers.cloudflare.com/durable-objects/concepts/what-are-durable-objects/
+[Hyperdrive]: https://developers.cloudflare.com/hyperdrive/
+[D1]: https://developers.cloudflare.com/d1/
