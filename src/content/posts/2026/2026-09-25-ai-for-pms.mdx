@@ -1,0 +1,59 @@
+---
+title: "Getting started with AI for Product Managers"
+date: 2026-09-25
+categories:
+  - AI
+tags:
+  - product-management
+---
+
+If you are a product manager in a software company, the likelihood is that your work has drastically changed over the last few years.  After all, why write product requirements when you can generate a good prototype with AI in a few hours?  However, what about the rest of the product managers out there?  
+
+![AI for Product Managers](/assets/images/2026/Sep25-banner.jpg)
+
+Perhaps you've not embraced the AI wave as much yet, or you are not that comfortable trusting the output yet?  Even when your product is not code-based, you can still get significant value out of AI by delegating the time-consuming mechanical work into prompts.  Here are some of my favorites.
+
+## First-pass synthesis
+
+Before AI, I would do dozens of interviews and take copious amounts of notes.  Then I had to make sense of them - what are the common problems we need to solve?  What are real pains, and what are just nice-to-have itches?
+
+Instead of spending an hour reading through a new batch of customer support tickets, survey responses, or interview notes to find themes, let AI do the initial reading.  Use this prompt:
+
+> Here is recent customer feedback.  Read all the files and summarize the top three most frequently mentioned pain points.  Group the remaining comments by sentiment.  Here are the comments:
+
+Then paste all the documents into the prompt.  You still apply your PM skills to decide what to do with the themes, but the AI does the manual labor of organizing the raw data.
+
+
+## First-pass product requirements documents
+
+I've spent many hours over my career working through requirements, deciding what is in and what is out, and refining user stories.  Whenever I need to write a product requirements document, the first draft comes from an AI.  Never write from scratch again. Here is the prompt:
+
+> I am writing a product requirements document for `[Feature Name]`.  Draft a standard product requirements document including an executive summary, baseline user stories, and suggested acceptance criteria.  Use "Jobs to be done" (JTBD), user stories, and the MoSCoW framework.  Here are my rough bullet points on what it needs to do:
+
+I then paste in the bullet points.  The resulting PRD is generated faster and you get to that editing task so much quicker.  You can shift your energy from typing boilerplate and organizing data to refining the actual requirements.
+
+## Tailoring Communication
+
+Product managers have to communicate with a diverse set of people.  However, the message is different for different audiences, even though the core information is the same.  You may send out a global email to the technical team with solid technical information, but summarize the benefits for a sales team, and then simplify it for a customer email.  Finally, that executive update requires nuance around the benefits and drawbacks.
+
+Write the update once with all the information, including the stuff that should be kept in-team.  Then use this prompt:
+
+> Here is my technical update on our latest product feature: `paste update`.  Rewrite this into three versions: 1) A short non-technical update for the executive team focusing on business value, 2) An email for the sales team highlighting customer benefits, and 3) A quick bulleted list for customer support.
+
+You write the update once and the AI generates the other versions you need, ensuring consistent messaging across the company while removing the friction of constant rewriting.
+
+## Go further with a local harness
+
+These techniques all work with either online or local harnesses.  A local harness has the benefit that you can pull data through MCP services or from local disk.  For instance, your customer feedback may be in ServiceNow.  There's [an MCP service](https://mcpservers.org/servers/michaelbuckner/servicenow-mcp) that you can use.  Once set up, you can tell the AI to go and pull the data directly from ServiceNow.  There are MCP servers for most online applications you use.
+
+A further refinement: save your interview notes and feedback locally as [Markdown](https://www.markdownguide.org/) and use a local harness like [OpenCode](https://opencode.ai). This allows you to attach files directly to your prompt instead of tedious copy/pasting. You can use the same AI model you normally use, but your data remains organized.
+
+Working with a local harness also allows you to use [Skills](https://product-on-purpose.github.io/pm-skills/getting-started/#what-are-skills), which are codified, reusable sets of instructions that teach the AI how to execute a specific, multi-step workflow. I've used the [Product on Purpose skills](https://product-on-purpose.github.io/pm-skills/) to great effect in building research documents, competitive analysis, and product requirements documents.
+
+Going beyond the online services, like ChatGPT, and embracing local AI usage will enable you to do more and return results faster while keeping your work private and secure.
+
+## Final thoughts
+
+As you blend AI into your day-to-day activities, you find you can automate a lot of the manual prep work and focus on what differentiates your job from the rest of the company: the actual strategy, decision-making, and communication that makes you a great PM.
+
+Start with an online service like ChatGPT (but make sure it is blessed by your IT or security team so your data is not used for training).  You may have an internal tool that is similar to ChatGPT.  If you have access to a local harness, then use it.  Automate the drudgery and you will become more effective while still retaining the judgement and communication skills you are known for.
