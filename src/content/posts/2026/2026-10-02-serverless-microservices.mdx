@@ -18,7 +18,6 @@ That sounds an awful lot like a microservice.
 
 ![Building Serverless Microservices](/assets/images/2026/Oct02-banner.jpg)
 
-
 I've worked with microservices for long enough to be cautious about that word. Microservices can provide useful separation between teams and systems, but they can also turn a perfectly understandable application into a distributed system with twelve deployments, fifteen dashboards, and a service mesh before anyone has acquired their first customer.
 
 Cloudflare Workers change some of the economics. A Worker is cheap to deploy, scales without a server fleet, and can call another Worker through a [Service Binding] using [Workers RPC]. There is no public URL, API key, load balancer, or service discovery mechanism to maintain. The platform handles that part.
