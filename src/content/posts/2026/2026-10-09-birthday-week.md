@@ -23,7 +23,7 @@ So, what has become easier?  What can I stop building myself?  And what responsi
 
 ## Developer productivity
 
-Developer experience is what I have spent the last 25 years working on, so this first set of announcements is very close to my hear.  It's about how you reduce the distance between an idea and a running application.  This is the section that changed the way I develop Cloudflare apps.  I'm now using vinext combined with the cf CLI and Vite+ for most of my new applications, and I'm looking at improvements to my agentic AI applications to leverage new sandboxing capabilities and git-based storage.
+Developer experience is what I have spent the last 25 years working on, so this first set of announcements is very close to my heart.  It's about how you reduce the distance between an idea and a running application.  This is the section that changed the way I develop Cloudflare apps.  I'm now using vinext combined with the cf CLI and Vite+ for most of my new applications, and I'm looking at improvements to my agentic AI applications to leverage new sandboxing capabilities and git-based storage.
 
 ### (BETA) cf is a new CLI you should be adopting
 
@@ -33,7 +33,7 @@ However, this is an open beta. Commands and configuration can still change. Wran
 
 ### Vinext makes framework portability more practical
 
-[Vinext 1.0][2] brings [Next.js](https://nextjs.org/) application patterns to a [Vite](https://vite.dev)-based implementation that can run on Workers and other platforms. Portability is much more useful when it doesn’t require rewriting the application. Support for Server Components, Server Actions, routing, and ISR makes this more than an interesting build-tool experiment. 
+[Vinext 1.0][2] brings [Next.js](https://nextjs.org/) application patterns to a [Vite](https://vite.dev)-based implementation that can run on Workers and other platforms. Portability is much more useful when it doesn’t require rewriting the application. Support for Server Components, Server Actions, routing, and ISR makes this more than an interesting build-tool experiment.
 
 Cloudflare describes 1.0 as production-ready, but compatibility still needs to be tested against your application. The reported greater-than-99% test compatibility excludes Cache Components. A compatibility percentage isn’t a migration plan, and your application may depend on precisely the feature that sits outside it.
 
