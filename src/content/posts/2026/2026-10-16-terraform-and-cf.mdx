@@ -1,0 +1,175 @@
+---
+title: "Bringing Terraform and the cf CLI together"
+date: 2026-10-16
+categories:
+  - Cloudflare
+tags:
+  - terraform
+---
+
+In my [Birthday Week takeaways](/posts/2026/2026-10-09-birthday-week.html) article, I said that the new [cf CLI](https://blog.cloudflare.com/cloudflare-cf-cli-launch/) makes combining Terraform with Cloudflare code deployments much easier. That deserves more than a sentence. I've been using Terraform to provision the infrastructure behind my Cloudflare demos and Wrangler to deploy their Workers, and the boundary between those tools has always required a little plumbing.
+
+![Bringing Terraform and the cf CLI together](/assets/images/2026/Oct16-banner.jpg)
+
+The new `cloudflare.config.ts` format gives me a better place to put that plumbing. I've added a small facility to [`@adrianhall/cloudflare-toolkit`](https://adrianhall.github.io/cloudflare-toolkit/) to read Terraform outputs from the configuration itself. I've also ported several demos to try the pattern in real applications rather than just in a configuration example.
+
+> **Bias announcement**: I work for Cloudflare, but not in its engineering or product departments. These are my own experiences with an open-beta CLI, not an official Cloudflare recommendation.
+
+## The division of responsibility has not changed
+
+I still want Terraform to provision the infrastructure: the D1 database, KV namespace, Access application, custom domain, and Worker registration. I want the deployment tool to build and upload application code and attach its bindings.
+
+This is the same division I described in [Using Terraform with Cloudflare](/posts/2026/2026-07-28-cf-terraform.html). It avoids asking Terraform to manage my application bundle while still letting me describe the infrastructure that supports it in one place. It also means the deployment configuration needs values that Terraform only knows after it has provisioned the resources.
+
+A D1 binding is a good example. Terraform creates a database and returns its ID. The Worker deployment needs that ID to bind `DB` to the right database. I don't want to copy it from `terraform output` into a configuration file every time I recreate a demo.
+
+So how do I get that ID across the boundary?
+
+## The Wrangler-era answer: generate the configuration
+
+In the older demos, I checked in a `wrangler.jsonc.tpl` file. Here is the important part of the [todo app's template](https://github.com/adrianhall/cf-demos/blob/main/wrangler-demos/todo-app/wrangler.jsonc.tpl), shortened for clarity:
+
+```jsonc
+{
+  "name": "{{worker_name}}",
+  "main": "./src/worker/index.ts",
+  "vars": {
+    "CLOUDFLARE_TEAM_DOMAIN": "{{cloudflare_team_domain}}"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "{{d1_database_name}}",
+      "database_id": "{{d1_database_id}}"
+    }
+  ]
+}
+```
+
+Terraform declared outputs named `worker_name`, `d1_database_name`, and `d1_database_id`. My `generate-wrangler` command, shipped with `cloudflare-toolkit`, read those outputs and replaced the matching `{{markers}}`. The result was a gitignored `wrangler.jsonc` for Wrangler to consume.
+
+The deployment scripts had to keep that sequence intact:
+
+```json
+{
+  "scripts": {
+    "deploy": "run-s deploy:infra deploy:worker",
+    "deploy:infra:apply": "terraform -chdir=infra apply -auto-approve",
+    "predeploy:worker": "run-s generate:wrangler generate:types",
+    "generate:wrangler": "generate-wrangler -cf --terraform infra",
+    "generate:types": "generate-wrangler-types",
+    "deploy:worker:publish": "vite build && wrangler deploy"
+  }
+}
+```
+
+This worked. In fact, it was considerably better than copying IDs by hand. But `wrangler.jsonc.tpl` was not the configuration I deployed; it was an input to a program that produced the configuration I deployed. For local development, I also needed a local-output fixture and a separate generation path.
+
+Every extra step was another opportunity to build or deploy against an old file. The template described what the Worker should look like, while the generated file described what Wrangler would actually see.
+
+## What `cf` changes
+
+Cloudflare's new [cf CLI](https://blog.cloudflare.com/cloudflare-cf-cli-launch/) uses `cloudflare.config.ts`: a TypeScript module that can construct its configuration programmatically. Rather than substituting strings into a JSONC template, I can read the values while `cf` evaluates the configuration.
+
+There is still a boundary between Terraform and `cf`. The CLI does not make Terraform state magically available as Worker bindings. In my new demos, the npm hook immediately after a successful apply exports Terraform's outputs:
+
+```json
+{
+  "scripts": {
+    "deploy:infra:apply": "terraform -chdir=infra apply -auto-approve",
+    "postdeploy:infra:apply": "terraform -chdir=infra output -json > infra/outputs.json",
+    "deploy:worker": "run-s migrate:remote deploy:worker:build deploy:worker:upload",
+    "deploy:worker:build": "vite build --mode production",
+    "deploy:worker:upload": "cf deploy --prebuilt"
+  }
+}
+```
+
+`infra/outputs.json` is gitignored. It is an intermediate snapshot of the outputs from the last apply, not a second, hand-maintained Worker configuration file. That's an important distinction: I've removed the generated deployment configuration, not the need to pass information between two tools.
+
+The `requireTerraformOutputs` helper in `@adrianhall/cloudflare-toolkit/vite` reads that snapshot. I give it a mapping from the names used in my TypeScript configuration to the output names declared in Terraform:
+
+```ts
+type TerraformOutputs = {
+  d1DatabaseId: string;
+  d1DatabaseName: string;
+  workerName: string;
+  hostname: string;
+};
+
+const OUTPUT_KEYS = {
+  d1DatabaseId: 'd1_database_id',
+  d1DatabaseName: 'd1_database_name',
+  workerName: 'worker_name',
+  hostname: 'hostname'
+} as const;
+```
+
+Then the configuration can use the values where they belong:
+
+```ts
+import { bindings, defineConfig, defineWorker } from 'cf/config';
+import { requireTerraformOutputs } from '@adrianhall/cloudflare-toolkit/vite';
+import * as entrypoint from './src/worker/index.ts' with { type: 'cf-worker' };
+
+export default defineConfig({
+  worker: defineWorker((ctx) => {
+    const isProduction = ctx.mode === 'production';
+
+    const values = requireTerraformOutputs<TerraformOutputs>({
+      path: isProduction ? 'infra/outputs.json' : 'infra/local-outputs.json',
+      keys: OUTPUT_KEYS,
+      hint: isProduction
+        ? 'pnpm deploy:infra'
+        : 'restore the committed infra/local-outputs.json fixture'
+    });
+
+    return {
+      name: values.workerName,
+      entrypoint,
+      domains: isProduction ? [values.hostname] : [],
+      env: {
+        DB: bindings.d1({
+          id: values.d1DatabaseId,
+          name: values.d1DatabaseName
+        })
+      }
+    };
+  })
+});
+```
+
+This is a condensed version of the [new todo demo](https://github.com/adrianhall/cf-demos/blob/main/cf-terraform-demos/todo/cloudflare.config.ts). The real configuration also contains assets, Access-related bindings, observability settings, and other Worker options.
+
+The difference is where the relationship lives. In the old version, `{{d1_database_id}}` was text in a template. In the new version, `values.d1DatabaseId` is part of the same TypeScript expression that declares the D1 binding. I can follow the value from Terraform output name to binding without first finding a generated file.
+
+The helper checks that the requested outputs exist and are strings. In production mode, a missing or incomplete output file produces an error with the command I should run, rather than quietly deploying a placeholder database ID. There is also a `readTerraformOutputs` variant for cases where missing outputs should mean “use a local fallback” instead of “stop.”
+
+## Local development is a deliberate choice
+
+I don't want `cf dev`, tests, or type generation to require a live Terraform apply. Each new demo therefore has a committed `infra/local-outputs.json` fixture with the same shape as `terraform output -json`, but with local placeholder values. The production snapshot stays out of git.
+
+The `ctx.mode` branch chooses between them. Production reads real, last-applied outputs; development reads the fixture. In the todo demo, the local D1 ID also matters to the migration script: local migrations and the DB binding must refer to the same simulated database.
+
+I think this is an improvement over generating a local `wrangler.jsonc`, but it is not zero configuration. I still maintain the Terraform output declarations, their TypeScript name mapping, and the local fixture. The benefit is that I maintain one Worker configuration, rather than a template plus generated copies with different lifecycles.
+
+## The things this does not solve
+
+A TypeScript configuration file improves the bridge; it doesn't change resource ownership. Terraform still cannot infer every relationship added by `cf` during deployment. If a Worker binds to a Terraform-managed queue or database, teardown ordering still matters. A non-empty R2 bucket still needs to be emptied before Terraform can destroy it. Those are infrastructure lifecycle problems, not JSONC problems.
+
+The exported `infra/outputs.json` also needs care. It reflects the **last export**, not necessarily the current state if somebody runs `terraform apply` outside the scripted workflow and forgets to refresh it. (Side note: it may be better to make the `terraform output` command a part of deployment rather than a post-provisioning step.) I keep the export immediately after apply and would make the same ordering explicit in CI. Terraform outputs can include sensitive values, so I wouldn't export secrets into this file or place them in plain-text Worker bindings. The current helpers accept string-valued outputs; they aren't a general-purpose serialization layer for Terraform state.
+
+Finally, `cf` is still in open beta. I'm using it for new work and for these demo ports, but I expect some commands and configuration details to move. Wrangler remains a reasonable choice for an existing project that doesn't need to migrate today.
+
+## Why I'm making the change anyway
+
+The old mechanism solved the immediate problem: Terraform created resources, `generate-wrangler` put their IDs into a file, and Wrangler deployed the Worker. The new mechanism solves the same problem with fewer independently maintained deployment artifacts:
+
+1. Terraform provisions the infrastructure.
+2. An npm hook exports its outputs to a gitignored JSON snapshot.
+3. `cloudflare.config.ts` reads and validates those outputs.
+4. `cf` builds and deploys the Worker using that configuration.
+
+I like tools that make an architectural boundary visible without making me babysit it. Terraform still owns infrastructure. `cf` still owns the application deployment. The toolkit helper just makes the handoff a normal, inspectable part of the Worker's TypeScript configuration.
+
+That is the Birthday Week announcement I was excited about: not that TypeScript is inherently better than JSONC, but that a programmatic configuration lets me stop generating a second configuration file just to connect two tools I already wanted to use.
