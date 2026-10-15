@@ -63,7 +63,7 @@ The deployment scripts had to keep that sequence intact:
 }
 ```
 
-This worked. In fact, it was considerably better than copying IDs by hand. But `wrangler.jsonc.tpl` was not the configuration I deployed; it was an input to a program that produced the configuration I deployed. For local development, I also needed a local-output fixture and a separate generation path.
+This was considerably better than copying IDs by hand. But `wrangler.jsonc.tpl` was not the configuration I deployed; it was an input to a program that produced the configuration I deployed. For local development, I also needed a local-output fixture and a separate generation path.
 
 Every extra step was another opportunity to build or deploy against an old file. The template described what the Worker should look like, while the generated file described what Wrangler would actually see.
 
@@ -85,7 +85,7 @@ There is still a boundary between Terraform and `cf`. The CLI does not make Terr
 }
 ```
 
-`infra/outputs.json` is gitignored. It is an intermediate snapshot of the outputs from the last apply, not a second, hand-maintained Worker configuration file. That's an important distinction: I've removed the generated deployment configuration, not the need to pass information between two tools.
+`infra/outputs.json` is gitignored. It is an intermediate snapshot of the outputs from the last apply, not a second, hand-maintained Worker configuration file. I've removed the generated deployment configuration, not the need to pass information between two tools.
 
 The `requireTerraformOutputs` helper in `@adrianhall/cloudflare-toolkit/vite` reads that snapshot. I give it a mapping from the names used in my TypeScript configuration to the output names declared in Terraform:
 
