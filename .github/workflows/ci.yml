@@ -1,0 +1,56 @@
+name: CI
+
+# Run the same build and verification pipeline for pull requests and for the
+# deployment workflow after changes land on main. Deploying is deliberately a
+# separate concern in deploy.yml.
+on:
+  pull_request:
+    branches: [main]
+  workflow_call: {}
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Build and verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        # Astro/Vite inlines PUBLIC_-prefixed environment variables into the
+        # output at build time. PR validation intentionally does not need a
+        # production beacon token, so it remains safe for forks.
+        run: npm run build
+        env:
+          PUBLIC_CF_BEACON_TOKEN: ${{ secrets.PUBLIC_CF_BEACON_TOKEN }}
+
+      - name: Verify (astro check + build correctness checks)
+        # `npm run build` already gates on scripts/check-build.mjs (route shape
+        # plus internal link and asset integrity). This adds `astro check`
+        # (types/content-schema) and keeps `npm run check` useful on its own.
+        run: npm run check
+
+      - name: Upload site artifact
+        # Workflow jobs have isolated filesystems. Uploading the validated build
+        # lets deploy.yml publish these exact files rather than rebuilding them.
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-dist
+          path: dist
+          if-no-files-found: error
