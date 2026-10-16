@@ -4,6 +4,7 @@
 import type { Post } from '../utils/posts';
 import { getPostDate, getPostUrl } from '../utils/posts';
 import { excerptOf } from '../utils/content';
+import { slugify } from '../utils/taxonomy';
 
 interface Props {
   posts: Post[];
@@ -25,7 +26,9 @@ const { posts } = Astro.props;
           {post.data.tags.length > 0 && (
             <ul class="tag-list">
               {post.data.tags.map((tag) => (
-                <li class="tag-pill">{tag}</li>
+                <li class="tag-pill">
+                  <a class="tag-link" href={`/tags/${slugify(tag)}/`}>{tag}</a>
+                </li>
               ))}
             </ul>
           )}
