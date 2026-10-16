@@ -29,13 +29,13 @@
     "@expressive-code/plugin-line-numbers": "^0.44.0",
     "pagefind": "^1.5.2",
     "typescript": "^6.0.3",
-    "wrangler": "^4.106.0"
+    "wrangler": "^4.151.0"
   },
   "allowScripts": {
-    "esbuild@0.28.1": true,
+    "esbuild@0.28.2": true,
     "sharp@0.34.5": true,
     "sharp@0.35.3": true,
-    "workerd@1.20260630.1": true,
+    "workerd@1.20261012.1": true,
     "fsevents@2.3.3": true
   }
 }
