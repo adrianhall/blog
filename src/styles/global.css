@@ -484,6 +484,21 @@ h4 {
   color: var(--color-border);
 }
 
+/* `.prose .tag-link` deliberately outranks the generic `.prose a` rule. */
+.prose .tag-link,
+.category-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.prose .tag-link:hover,
+.prose .tag-link:focus-visible,
+.category-link:hover,
+.category-link:focus-visible {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
 /* Standalone tag/category pills — used in the /tags/ and /categories/
    landing pages, where each entry is a link + a count, not part of a
    post's inline tag-list. */

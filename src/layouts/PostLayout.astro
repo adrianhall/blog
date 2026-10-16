@@ -7,6 +7,7 @@ import Base from './Base.astro';
 import TableOfContents from '../components/TableOfContents.astro';
 import ShareButtons from '../components/ShareButtons.astro';
 import Comments from '../components/Comments.astro';
+import { slugify } from '../utils/taxonomy';
 
 interface Props {
   title: string;
@@ -41,7 +42,9 @@ const canonicalUrl = new URL(path, Astro.site).toString();
         tags.length > 0 && (
           <ul class="tag-list">
             {tags.map((tag) => (
-              <li class="tag-pill">{tag}</li>
+              <li class="tag-pill">
+                <a class="tag-link" href={`/tags/${slugify(tag)}/`}>{tag}</a>
+              </li>
             ))}
           </ul>
         )
@@ -65,7 +68,16 @@ const canonicalUrl = new URL(path, Astro.site).toString();
           categories.length > 0 && (
             <>
               <dt>Categories</dt>
-              <dd>{categories.join(', ')}</dd>
+              <dd>
+                {categories.map((category, index) => (
+                  <>
+                    {index > 0 && ', '}
+                    <a class="category-link" href={`/categories/${slugify(category)}/`}>
+                      {category}
+                    </a>
+                  </>
+                ))}
+              </dd>
             </>
           )
         }
