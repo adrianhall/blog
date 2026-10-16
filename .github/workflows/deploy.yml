@@ -1,8 +1,8 @@
 name: Deploy
 
-# M5: publish the Astro site to Cloudflare Workers Static Assets on every
-# push to main, mirroring the local `npm run publish` pipeline exactly
-# (build -> verify -> deploy) so CI and manual publishing can never drift.
+# Publish the Astro site to Cloudflare Workers Static Assets after changes land
+# on main. The build and verification work is delegated to ci.yml so it is
+# identical to the pull-request gate.
 on:
   push:
     branches: [main]
@@ -16,44 +16,25 @@ permissions:
   contents: read
 
 jobs:
+  validate:
+    name: Build and verify
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
   deploy:
-    name: Build, verify, and deploy
+    name: Deploy to Cloudflare Workers
+    needs: validate
     runs-on: ubuntu-latest
     environment: production
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Node
-        uses: actions/setup-node@v6
+      - name: Download validated site artifact
+        uses: actions/download-artifact@v4
         with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        # PUBLIC_CF_BEACON_TOKEN must be present here, not on the deploy step:
-        # Astro/Vite inlines PUBLIC_-prefixed env vars into the built HTML at
-        # `astro build` time (src/components/Analytics.astro reads it via
-        # `import.meta.env`). `wrangler deploy` only uploads the already-built
-        # ./dist directory afterwards -- setting the var there would be a
-        # silent no-op and ship a beacon-less site.
-        run: npm run build
-        env:
-          PUBLIC_CF_BEACON_TOKEN: ${{ secrets.PUBLIC_CF_BEACON_TOKEN }}
-
-      - name: Verify (astro check + build correctness checks)
-        # `npm run build` above already gates on scripts/check-build.mjs (route
-        # shape + internal link/asset integrity); this step adds `astro check`
-        # (types/content-schema) and re-runs those checks so `npm run check`
-        # stays meaningful when invoked on its own.
-        #
-        # The Jekyll-era URL-contract verifier was retired to
-        # scripts/migration/ once the migration completed -- see the README
-        # there before reinstating any of it.
-        run: npm run check
+          name: site-dist
+          path: dist
 
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v4
