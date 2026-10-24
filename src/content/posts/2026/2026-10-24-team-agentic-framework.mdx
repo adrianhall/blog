@@ -1,0 +1,96 @@
+---
+title: "Improving the AI Maturity Model: The Team-Driven Agentic Framework"
+date: 2026-10-24
+categories:
+  - Devtools
+tags:
+  - ai
+---
+
+When I wrote the [AI Maturity Model](/posts/2026/2026-04-03-ai-discussion.html), I ended on Stage 6, the Squad Leader. While most developers are still in earlier stages, a new stage is emerging - team-driven agentic frameworks. Just as when software development moved from one person to a team, the next stage is going to be about teams of humans managing teams of agents.  So I'm adding a new stage to the model, and I'm calling it Stage 7: the Team-Driven Agentic Framework.
+
+![Stage 7 of the AI Maturity Model](/assets/images/2026/Oct24-banner.jpg)
+
+In Stage 6, I'm the architect.  I write the spec, I hand it to a squad of agents, and I come back on Monday to check the results.  That works because I'm one person.  I can hold the whole design in my head, I know why every decision was made, and I'm the only person who has to agree with myself.
+
+Real software isn't built that way.  Products have product managers who know what customers actually asked for.  They have engineers who know which parts of the system are fragile.  They have security people who will ask uncomfortable questions at the worst possible moment, and support staff who know exactly which bug is going to generate forty tickets next week.  A single human can't be all of those people, nor should they have to be.
+
+So the next evolution is the *team-driven agentic framework*.  In this stage, a team is responsible for the specification and code, and the agents are the team's hands.  The humans set the direction, agree on the rules, and judge the results together.  The agents do the mechanical work inside those rules.
+
+This is emerging as a real possibility, but I don't have a methodology for this.  Teams of software developers are only just starting to figure out that this is a problem to be solved, and a few products are feeling their way toward a solution, but no-one has solved it yet.
+
+## Why one person doesn't scale to a team
+
+In the [AI Maturity Model](/posts/2026/2026-04-03-ai-discussion.html) the human gives up control in exchange for productivity.  Software isn't developed by a single person though.  We accept that productivity per human dips when teams come into the picture because we get an overall benefit - complementary skills and splitting the work among many hands.  In the earlier phases, we assume that agents are just another kind of hand, and that the trade-off is the same.  The more control the agent has, the more productive it is, but the less visibility the human has into what it's doing.
+
+When I'm the only human, I resolve all the design conflicts in my own head.  When there is a team of PM, designer, engineer, security, and support staff, the conflicts show up in the pull request, in the Slack thread, or (worst of all) in production.
+
+Right now, most teams are in a strange middle ground.  Individual engineers are running agents in private terminals, and the rest of the team gets the output as a diff.  That's the single-player model.  I wrote about how this works for one person in [Stage 5](/posts/2026/2026-04-03-ai-discussion.html#stage-5-the-spec-driven-architect) and [Stage 6](/posts/2026/2026-04-03-ai-discussion.html#stage-6-the-squad-leader) of the [AI Maturity Model](/posts/2026/2026-04-03-ai-discussion.html).  It doesn't work for a team, because the thinking that produced the code is invisible to everyone except the person who ran the agent.
+
+## The gaps
+
+Before a team can really manage a team of agents, several things have to change.  None of them are solved yet.
+
+**1. Ownership.**  When an agent writes code, who owns that code?  The person who typed the prompt?  The person who wrote the spec?  The person who approved the pull request?  In the single-human model, the answer is obvious.  In a team model, the answer needs to be written down, and it needs to be attached to the work itself, not buried in a commit author field.
+
+**2. Conflicting steering.**  Two people give an agent opposite instructions in the same session.  One says "use the existing auth library" and the other says "we're moving off it this sprint."  The agent will try to satisfy both, and it will do a confident job of satisfying whichever one it read last.  Teams need a way to see who is steering, to queue instructions, and to decide who wins when they disagree.
+
+**3. Identity and permissions.**  Whose credentials does the agent use?  If the agent is acting on behalf of the engineer who started the task, it should only be able to do what that engineer can do.  If the PM can steer the agent, the PM's permissions have to be considered too.  My [agent authentication post](/posts/2026/2026-08-25-agent-authentication.html) covers the delegation question in more depth, and the team version of that question is harder.
+
+**4. Review independence.**  The engineer who steered the agent is the least likely person to see its mistakes.  They were there for the decisions, so they read the diff with the same assumptions the agent made.  Team workflows need reviewers who weren't part of the session, and who review the spec as well as the code.
+
+**5. Non-engineers in the loop.**  A team model only works if the people closest to the customer can contribute directly.  That means a PM can report a bug, watch the fix happen, and approve the behaviour, without needing to read a diff.  It also means deciding what a PM is allowed to approve.  Not every decision is a product decision.
+
+**6. Shared memory and handoffs.**  Work that lasts longer than one person's day needs a record of what was decided and why.  In my [spec-driven design post](/posts/2026/2026-09-11-is-spec-driven-design-dead.html), I suggested a `MEMORY.md` file that records the reasons behind decisions.  For a single developer that's a nice habit, but it's critical for a team.  It becomes the thing a new person reads on Tuesday to understand what happened on Friday.
+
+**7. Test authority.**  This one connects directly to my [testing post](/posts/2026/2026-06-07-agentic-testing.html).  I argued that the agent writing the code shouldn't write the tests, and that a human arbiter should settle the disagreements.  In a team, there isn't one arbiter.  There are several, and they may not agree about what the tests should say.  The specification and the tests need to be team-owned, with a clear process for resolving disagreements.
+
+## The team workflow
+
+Here's what a team-driven workflow might look like, based on how I've been working and on what the products are starting to support.  It's a sketch, not a standard, and I expect parts of it to be wrong.
+
+**Step 1: The team writes the spec together.**  The PM describes the problem and the desired outcomes.  Engineers add the constraints and the technical risks.  Security and compliance add the decision boundaries (what requires a human sign-off, what data can be touched, what can never be done automatically).  The output is a spec that the whole team has seen, not one person's document.  Get the specification right before the code, because the spec is the team's shared understanding of what the code should do.
+
+**Step 2: The spec is split into two kinds of truth.**  The first is the *intent*: the problem, the scenarios, the non-goals, and the acceptance criteria.  In general, the PM owns this and the engineers review it. The second is the *engineering spec*: the interfaces, the data model, and the design decisions.  An engineer owns this, but the PM and security review it. Think of the RACI (Responsible, Accountable, Consulted, Informed) model for determining ownership and responsibility.
+
+**Step 3: A test agent writes the tests from the intent, and a human engineer owns them.**  This is my Agent Q from the testing post, but now the spec is team-owned, so the tests come from the team's agreed scenarios, not from the code.  The tests should fail at the start.  If the test says the wrong thing, that's a spec problem, and it goes back to the team.
+
+**Step 4: A coding agent implements the engineering spec against the tests.**  This is Agent X.  It runs the tests and reports what passes and what doesn't.  It can't change the tests, and it can't change the intent.  If it thinks the test is wrong, it says so and explains why, and the disagreement goes into the work record.
+
+**Step 5: Steering happens in one place, with a visible owner.**  Anyone on the team can see the agent's progress and add context.  Only the person who owns the current step can change direction, and any change of direction gets recorded.  This is where the shared session tools matter.  A Slack code channel or a multiplayer workspace gives the team a single place to watch the work, instead of a private terminal and a Slack message that says "it's almost done".
+
+**Step 6: Review is by people who weren't in the session.**  A reviewer, ideally with a different perspective (security for auth changes, an engineer who knows the affected module), reads the diff against the spec and the tests.  An agent can do a first pass, but the agent review is a filter, not an approval.  If repository rules require a human approval for agent-authored pull requests, that's a good thing and should be the default.
+
+**Step 7: Decision gates stay with people.**  Anything irreversible (a data migration, a change to a public API, a production deployment) gets a named human approver.  The approval is recorded on the work item, not just in a chat message.
+
+**Step 8: The record is kept.**  The spec, the test history, the decisions, the disagreements, and the approvals all stay attached to the task.  When the work is merged, the task is archived, but it's searchable.  That's the team's `MEMORY.md`.
+
+Notice that the TDD discipline is doing a lot of the work here.  The tests are the bridge between the team's intent and the agent's implementation.  If the tests come from the spec and not from the code, the agent can't quietly move the goalposts.  Without that, a team of agents will confidently build the wrong thing together, and the team will only find out during the demo.
+
+This does have a desirable side effect: the team has to be disciplined about writing the spec.  My experience working with engineers has been that a lot can be unsaid because of shared understanding.  In the agentic world, if the spec is wrong, the tests are wrong, and the agent will do exactly what it was told, which will be wrong.  
+
+## What people are building
+
+A few products are moving in this direction.  None of them are the full answer, and some of them are doing something quite different from what I've described.
+
+**Slack Code** launched in August.  You mention an agent (Claude, Devin, GitHub Copilot, or Vercel, with ChatGPT coming) in a conversation, and it creates a *code channel* for that task.  The channel shows the plan, the diffs, and a live preview.  Anyone on the team can join, add context, pause the agent, or redirect it.  High-stakes changes can route to a person for a quick approval in the channel.  The channel archives itself when the work is done.  This covers steps 5 and 7 well, and it's the closest thing I've seen to a shared work record.  It's built on the Slack permission model, so it doesn't yet have the concept of an intent owner or a separate test authority.
+
+**GitHub Copilot in Slack and Teams** (public preview since August) lets a team start an agent session from a conversation.  Sessions are shared, and the pull requests it opens are attributed to a Copilot app identity.  Repository administrators can require an extra human approval before an agent-authored pull request can merge.  That's a useful gate for step 6, and it's the kind of rule every team should be setting up now.
+
+**Claude Code agent teams** are experimental.  One Claude Code session acts as the team lead, creates a shared task list, and spawns teammates that can message each other directly.  This is a good example of agents coordinating with each other, but it's still one human in charge.  It's a model for the agent side of step 4, and it shows the limits: it doesn't do anything about intent ownership.
+
+**Multiplayer workspaces** like [AQ](https://aq.dev/) and [Conductor Cloud](https://www.conductor.build/) take a different approach.  Instead of putting the agent in a chat thread, they share the whole working session, including the terminal, the editor, and the running app.  Teammates can join, follow, and steer.  This is closer to a team workspace than a chat channel, but the governance questions (who owns what, who can approve) are still mostly left to the team.
+
+**Fleet tools** like [GitHub Agent HQ](https://github.blog/news-insights/company-news/welcome-home-agents/) and [Warp Oz](https://www.warp.dev/oz) give managers an organisation-wide view of agent runs, with audit trails.  They're good for knowing what happened, but they show you the runs, not the decisions.
+
+Put together, these products cover pieces of the workflow: shared visibility, approval gates, shared memory, and a single place to work.  None of them covers the whole thing.  In particular, I haven't seen anything that treats the spec and the tests as team-owned artefacts with their own review process.
+
+## Where this is going
+
+I want to be careful here, because this is the part where it would be easy to overclaim.  The products above are weeks or months old.  Several are in preview or beta.  The workflow I sketched is my guess at what makes sense, not a description of what teams are doing successfully at scale.
+
+What I'm confident about is the direction.  Agents are getting better at executing well-defined work, and the bottleneck is moving from writing code to deciding what the code should do and agreeing on who is responsible for it.  That's a team problem.  The human skills that matter most (product judgement, security instincts, knowing when a requirement is wrong) are distributed across people, and the tools need to reflect that.
+
+I also think the methods will change faster than we expect.  Some of what I wrote in the spec-driven design post will look quaint in a year.  Some of the roles I described may collapse into one another, or split into ones I haven't thought of.  The safest thing to say is that we are still early, and anyone claiming a finished methodology for human teams managing agent teams is selling something.
+
+So I'm treating this as a working hypothesis, not a conclusion.  If you're running a team and you've found a workflow that works, or a failure mode that I haven't mentioned, I'd like to hear about it.  The next stage of the [AI Maturity Model](/posts/2026/2026-04-03-ai-discussion.html) will be written by teams, not by one architect working alone on a Friday afternoon.
