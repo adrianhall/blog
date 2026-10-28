@@ -1,0 +1,334 @@
+---
+title: "Build the Agent Loop"
+date: 2026-11-03
+categories:
+  - AI
+tags:
+  - agentic-coding
+mermaid: true
+---
+
+import CodingAgentToc from '../../../components/series/2026-coding-agent-toc.mdx';
+import Mermaid from '../../../components/Mermaid.astro';
+
+I am currently working my way through the process of building a coding agent.  The idea is to learn all the concepts that go into a coding agent like [OpenCode](https://opencode.ai) so that I can build my own.  This is the second part of a series of posts on building that basic coding agent. 
+
+![Build the agent loop](/assets/images/2026/Nov03-banner.jpg)
+
+<CodingAgentToc />
+
+I built a chat app that is deliberately not an agent in [Part 1](/posts/2026/2026-10-30-coding-agent-part-1.html) of this series. The Worker makes one model call per message, keeps nothing between requests, and the browser holds the whole conversation. Reload the page and it's gone. This time I'm going to move the conversation into an agent framework, so it survives a reload and shows up in a second browser. The model still makes one call per answer, but it doesn't act (so, technically, it's still not an agent).
+
+## Agent frameworks are the new web frameworks
+
+You can write an agent loop by hand. It's about sixty lines: call the model, check for tool calls, run them, append the results, go around again. I'll show you what that looks like when we get to tools in Part 3. But you wouldn't build a production web app by parsing HTTP requests yourself, and for the same reason you probably don't want to hand-roll the part of an agent that has to survive a crashed process, stream tokens to a browser, resume after a deploy, and keep the transcript somewhere durable.
+
+That's what an agent framework is for, and the comparison with web frameworks is a good one. Early on there were a handful of them and they were pretty basic. As time progressed, the number of frameworks grew - some got more "batteries included" and some were more bare-bones. They don't just differ in syntax; they differ in their **mental model** of what an app is (pages? components? routes? islands?), and that decides what's easy and what's a fight. Agent frameworks are at the same point right now. Some give you a base class to extend. Some give you a declarative function that describes what the agent knows. Some are a toolkit of primitives and little else. Expect more of them, and expect them to keep changing quickly.
+
+Cloudflare's own description of how the pieces stack is a useful map:
+
+<Mermaid code={`flowchart TB
+    F["Framework: project structure, conventions, CLI, developer experience (Flue)"]
+    H["Harness: the agent loop that calls tools, reads results, manages context (Pi, Project Think)"]
+    R["Runtime / platform: compute, state, storage, durable execution (Agents SDK, Durable Objects)"]
+    F --> H --> R
+`} />
+
+The lines between the layers are blurry, and the products don't always agree on which layer they are. But the shape is helpful: something provides durable compute and storage, something runs the loop, and something gives you a pleasant way to describe an agent. There are three options worth knowing about on the Cloudflare Dev Platform.
+
+### Agents SDK
+
+The [Agents SDK](https://developers.cloudflare.com/agents/) is the bottom layer. You extend an `Agent` class, which is a Durable Object underneath, and you get state management, WebSockets, scheduling, RPC, and durable execution (a way to checkpoint a long-running turn so it can resume after an eviction or a deploy). It is deliberately unopinionated about how your agent thinks. Reach for the Agents SDK when you want to get really low level for control or when you want to write your own harness.
+
+### Project Think
+
+[Project Think](https://developers.cloudflare.com/agents/harnesses/think/) is Cloudflare's first-party harness, built on the Agents SDK. You extend a single `Think` class and provide a model, and it supplies the agentic loop, message persistence, streaming, stream resumption, client tools and workspace file tools, all backed by Durable Object SQLite. It speaks a WebSocket chat protocol to browser clients, with React hooks on the other end.
+
+```ts
+export class MyAgent extends Think {
+  getModel() {
+    return createAI({ binding: this.env.AI })('@cf/moonshotai/kimi-k2.6');
+  }
+}
+```
+
+### Flue Framework
+
+The [Flue Framework](https://flueframework.com/) comes from the team behind Astro, and it shows. It's an agent framework, not just a harness: it has a project structure, a CLI, a Vite plugin, and an ecosystem of integrations (Slack, GitHub, databases, sandboxes). The loop itself comes from [Pi](https://pi.dev/), the open harness that OpenClaw is built on. It targets Cloudflare through the Agents SDK, so each Flue agent becomes a Durable Object that gets the SDK's durable execution for free.
+
+What makes it different is the mental model. You don't script what the agent *does*. You describe what it *knows*. An agent is a function that declares its model, tools, skills and instructions, and returns a system prompt:
+
+```ts
+export function MyAssistant() {
+  useModel('moonshot/kimi-k2');
+  return 'You are a helpful assistant.';
+}
+```
+
+There is no orchestration loop to write. The framework owns it. That's the same bargain Astro or Next.js offers on the web: give up some control over the plumbing, get a lot of it done for you.
+
+### Which one should you start with?
+
+I'm going to use **Flue Framework** for the rest of this series, and if you're starting out on the Cloudflare Dev Platform I think it's the best place to begin. It has the best developer experience of the three, and it's the most batteries-included. A sandbox, skills, MCP connections, subagents, persistent state and observability are all things you *declare* rather than build. Over the rest of the series I'll dedicate an article to each of these additions, and you'll see that most of them are a line or two of code. The cost is the usual one for a framework: you're working in its model, and you'll occasionally hit a place where its idea of the world and yours differ. I'll point those out when we hit them.
+
+That doesn't make the other two the wrong choice. If you want the shortest path to a chat agent that is Cloudflare-native end to end, Project Think is excellent. If you're building your own harness or need control over every step, drop to the Agents SDK. Pick the mental model that fits the thing you're building.
+
+## What changes from Part 1
+
+[Part 1](/posts/2026/2026-10-30-coding-agent-part-1.html) and Part 2 are a before-and-after pair, so the diff between them is the interesting exhibit. The [full diff is on GitHub](https://github.com/adrianhall/cf-demos/compare/coding-agent/part-1...coding-agent/part-2) (it's touching 42 source files, mostly in the Worker and the store), but the shape of it is simple.
+
+In Part 1, the browser is the memory and the Worker is stateless:
+
+<Mermaid code={`sequenceDiagram
+    autonumber
+    participant B as Browser (Pinia store)
+    participant W as Worker (POST /api/chat)
+    participant M as Model
+
+    Note over B: holds the whole transcript
+    B->>W: Full transcript + new message
+    W->>W: Validate transcript
+    W->>M: system prompt + transcript
+    M-->>W: Streamed reply
+    W-->>B: NDJSON frames
+    Note over W: forgets everything
+`} />
+
+In Part 2, the conversation moves to the server and the browser only watches it:
+
+<Mermaid code={`sequenceDiagram
+    autonumber
+    participant B as Browser (Pinia store)
+    participant W as Worker (Hono + Access)
+    participant A as Agent (Durable Object)
+    participant M as Model
+
+    B->>W: Send only the new message
+    W->>W: Check identity and conversation owner
+    W->>A: Forward to this conversation's agent
+    A->>A: Append to transcript (SQLite)
+    A->>M: system prompt + transcript
+    M-->>A: Streamed reply
+    A->>A: Append reply to transcript
+    A-->>B: Live stream of the conversation
+    Note over A: transcript survives eviction
+`} />
+
+Three things moved.
+
+**The loop moved into a Durable Object.** In Part 1 the "loop" (one pass, really) ran inside a Worker request and died when the request did. Now each conversation has its own agent, running inside its own Durable Object. The agent runs the loop; the Worker's job shrinks to deciding whether a caller is allowed to talk to it and getting the request there.
+
+**The UI stopped owning the conversation.** The Pinia store no longer keeps a message list to send back. It *observes* the conversation instead: it opens a connection to the agent, receives the transcript as it grows, and sends only the new message. Flue's browser client (`@flue/sdk`) does this with `observe()`. It reads the conversation's history first and then follows it live by observing the SSE (server-side events) stream from the server-side agent. A reload, or a second browser, shows the same thing.
+
+**The transcript moved into the Durable Object's SQLite.** The short-term memory I described in Part 1 (which was stored in-browser using Pinia) now has a home. The transcript, the stored stream of what happened, lives in the SQLite database attached to that conversation's Durable Object. When the durable object is evicted and woken up again, or the browser refreshes, the conversation is still there.
+
+### One Durable Object per conversation
+
+Every conversation is its own Durable Object, addressed by the conversation id. Flue generates the class for each agent. The `Assistant` agent becomes `FlueAssistantAgent`, bound as `FLUE_ASSISTANT_AGENT`, and the object's name is the conversation id:
+
+<Mermaid code={`flowchart LR
+    B1[Browser] --> W[Worker<br/>Access + ownership check]
+    B2[Second browser] --> W
+    W --> I[("ConversationIndex<br/>one per owner<br/>the list only")]
+    W --> C1[("Conversation A<br/>Durable Object<br/>agent loop + SQLite")]
+    W --> C2[("Conversation B<br/>Durable Object<br/>agent loop + SQLite")]
+    W --> C3[("Conversation C<br/>Durable Object<br/>agent loop + SQLite")]
+`} />
+
+Durable objects suit agents because of what they bring to the process. Conversations are isolated from each other: they don't share memory, and one noisy agent can't slow another down. Each conversation has its own storage, so there's no shared database to design and no row-level scoping to get wrong. Idle conversations cost nothing because the object is evicted, and a conversation with a model call in flight can keep running with no browser attached.
+
+There's one second, small Durable Object: `ConversationIndex`, one per owner, which holds the list of that person's conversations and nothing else. Flue has no API to list conversations, so the app needs somewhere to keep the list. Conversation ids are `<ownerKey>.<ULID>`, where `ownerKey` is a prefix of a hash of the verified Access identity. The server issues them, so the client never picks one. A middleware compares the id's owner prefix with the caller's own before the request is allowed anywhere near the agent.  This could easily have been a D1 table or a KV namespace as well.  Each of these has their own tradeoffs, but I chose a Durable Object because it is the same pattern as the agent itself.
+
+### Terraform didn't change
+
+Durable Objects are declared in the Wrangler config, not in Terraform, so the infrastructure for Part 2 is byte-for-byte the same as Part 1.
+
+> **Flue uses `wrangler` for deployment**
+>
+> Flue does not currently support the `cf` CLI for deployment.  Under the covers, a `wrangler.jsonc` is generated
+> and `wrangler publish` is run.  You can still use Terraform to manage the Cloudflare resources, but you will need 
+> to use `wrangler` to deploy the Worker, at least until the Flue team adds support for the `cf` CLI.
+
+## The code
+
+This code is not complete.  I've removed error handling, logging, and other details to keep the diff small.  The full code is available on [GitHub](https://github.com/adrianhall/cf-demos/tree/coding-agent/part-2/flue-demos/coding-agent).
+
+### Wiring Flue into the build
+
+Flue is a Vite plugin. It scans for agent files, generates a Durable Object class for each one, and hands the result to the Cloudflare Vite plugin. There are two pieces of config. The first tells Flue where agents live and what to target:
+
+```ts
+// flue.config.ts
+export default {
+  target: 'cloudflare',
+  agents: 'agents/**/*.ts'
+};
+```
+
+The second is the Vite config. The order matters here.  The Cloudflare Access plugin must come first, so that the Access JWT is available to the Flue plugin when it runs.  The Flue plugin must come before the Cloudflare plugin, so that it can generate the Durable Object classes and hand them to the Cloudflare plugin.
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  plugins: [
+    cloudflareAccessPlugin(/* same as Part 1 */),
+    vue(),
+    flue(),
+    cloudflare({ config: flueWorkerConfig() })
+  ]
+});
+```
+
+`flueWorkerConfig()` merges Flue's generated binding and migration into the Cloudflare plugin's configuration in memory. It writes no files. There's no `main` entry in the Wrangler template either, because Flue supplies the Worker entry.
+
+### Declaring the Durable Objects
+
+The Wrangler template gains the `ConversationIndex` binding. Flue contributes the agent's binding for you, but the migrations are yours to author and they're append-only: you never reorder or edit one that's been deployed.
+
+```jsonc
+// wrangler.jsonc.tpl (the part that changed)
+"durable_objects": {
+  "bindings": [{ "name": "CONVERSATION_INDEX", "class_name": "ConversationIndex" }]
+},
+"migrations": [
+  { "tag": "flue-class-FlueAssistantAgent", "new_sqlite_classes": ["FlueAssistantAgent"] },
+  { "tag": "app-class-ConversationIndex", "new_sqlite_classes": ["ConversationIndex"] }
+]
+```
+
+The `new_sqlite_classes` gives a durable object a SQLite database, which is what makes the transcript durable. Migrations use `migrations` and never `exports`. The two are mutually exclusive and Flue needs `migrations`.
+
+### The agent
+
+The actual agent is a single file and function. It declares the model and any additional hooks before returning the system prompt.
+
+```ts
+// src/agents/assistant.ts
+'use agent';
+
+import { useModel, useResponseFinish } from '@flue/runtime';
+import { MODEL } from '../shared/model';
+
+export function Assistant(): string {
+  useModel(MODEL.flue); // cloudflare/@cf/moonshotai/kimi-k2.6, same model as Part 1
+  useResponseFinish(({ response }) => ({ usage: response.usage })); // token totals ride on the reply
+  return 'You are a helpful assistant. Keep replies short.';
+}
+
+// Pin the identity so renaming the function can't orphan stored conversations.
+Assistant.agentName = 'assistant';
+```
+
+The `use*` calls (called *hooks*, in the same sense as React hooks) declare what the agent has. `useModel` says which model it talks to, and `useResponseFinish` stamps the token usage onto the reply message, allowing us to display token usage in the UI. We'll extend this later in the series as we add features to the agent.
+
+Notice what *isn't* here: no loop, no message array, no database calls. Flue runs the loop, and Flue reads and writes the transcript.
+
+### Mounting it in the Worker
+
+The Worker's `POST /api/chat` route and all the transcript validation are gone. In their place, the agent's router is mounted under `/api/agent/assistant`, behind the same layers as every other API route:
+
+```ts
+// src/app.ts
+import { createAgentRouter } from '@flue/runtime/routing';
+import { Assistant } from './agents/assistant';
+
+const app = new Hono<AppBindings>();
+
+app.use(accessMiddleware);                 // 1. Cloudflare Access JWT, always first
+app.use('/api/*', requireAdmin);           // 2. only ADMIN_EMAIL
+app.use('/api/*', conversationScope(conversationService, costSource)); // 3. owner key from identity
+
+app.use('/api/agent/assistant/*', agentMountAuthorization());
+app.route('/api/agent/assistant', createAgentRouter(Assistant));
+
+app.route('/api/conversations', conversationRouter);
+```
+
+Flue hands you a Hono router for the agent using `createAgentRouter(Assistant)`.  This allows you to provide an API to send a message, observe the conversation, and abort a response. The `agentMountAuthorization` middleware reads the conversation id off the path and asks the conversation service whether it belongs to the caller. A prefix that isn't yours returns a `403 Forbidden` response; an id that was never issued is a `404 Not Found` response. An RPC to a Durable Object id that doesn't exist creates an empty object under whatever name the caller made up, so it's important to do authorization befor any handler that accesses a durable object.
+
+### The browser stops owning the conversation
+
+On the client, Flue's SDK does the heavy lifting:
+
+```ts
+// src/client/services/agent-connection.ts
+import { createFlueClient } from '@flue/sdk';
+
+export function openConversation(conversationId: string) {
+  const client = createFlueClient({ url: `/api/agent/assistant/${conversationId}` });
+  const observation = client.observe({ live: 'sse' });
+
+  return {
+    snapshot: () => observation.getSnapshot(),
+    subscribe: (listener: () => void) => observation.subscribe(listener),
+    async send(text: string) {
+      const admission = await client.send({ message: { kind: 'user', body: text } });
+      await client.wait(admission);
+    },
+    close: () => observation.close()
+  };
+}
+```
+
+`observe()` reads the conversation's history from the server, then follows it live, and `getSnapshot()` plus `subscribe()` is exactly the shape a Pinia store wants. The `send()` function sends only the new message. Compare that with Part 1, where every request carried the whole transcript.
+
+A note on transport. `live: 'sse'` means the conversation arrives over a long-lived SSE (server-side events) stream; the other choice Flue's client offers is `'long-poll'`. SSE is a good fit here because a conversation is one-directional while a response streams: the server pushes tokens, and the browser's own messages go out as ordinary requests. If you want a persistent two-way socket, that's what the Agents SDK and Project Think use natively (they speak a WebSocket chat protocol).
+
+The Pinia store changes accordingly. It keeps a `messages` ref that it copies from the snapshot, rather than building up and maintaining a messages array itself:
+
+```ts
+// src/client/stores/chat.ts (trimmed)
+const live = openConversation(id);
+unsubscribe = live.subscribe(() => {
+  const snapshot = live.snapshot();
+  messages.value = toDisplayMessages(snapshot.conversation?.messages ?? []);
+});
+```
+
+### Keeping the inspector working
+
+The context inspector from Part 1 worked because the Worker knew exactly what it had sent to the model. Now the Worker doesn't send anything: the agent does, inside a Durable Object the Worker never sees into. So how does the inspector keep working?
+
+Flue emits events as it runs, and one of them, `turn_request`, carries the full request the model is about to receive. A small subscriber at module scope in the Worker catches it, turns it into the same colour-coded segments as before (with the same pure function Part 1 used), and writes it to a table in the agent's durable object scoped SQLite:
+
+```ts
+// src/app.ts (trimmed)
+observe((event) => {
+  if (event.type !== 'turn_request' || event.purpose !== 'agent') return;
+  const { storage } = getCloudflareContext();
+  store.recordRequest(storage.sql, {
+    turnId: event.turnId,
+    segments: buildSegmentsFromRequest(event.request)
+  });
+});
+```
+
+Two small RPC methods, added to the agent's Durable Object with Flue's documented `extend()` hook, let the Worker read it back:
+
+```ts
+// src/agents/assistant.ts (trimmed)
+export const cloudflare = extend({
+  base: (Base) =>
+    class extends Base {
+      latestContext() { return store.latestContext(this.ctx.storage.sql); }
+      contextUsage()  { return store.usage(this.ctx.storage.sql); }
+    }
+});
+```
+
+The write is synchronous and local, so it can't be lost to an un-awaited promise, and nothing about the inspector UI changed. The component within the UI reads from a different source behind the same interface.
+
+## Things the framework taught me
+
+A few details are worth knowing before you build on this:
+
+- **A brand-new conversation looks empty.** A conversation nobody has written to has no history, so `observe()` settles into an `absent` phase and stops. The first message is what creates the agent. The client has to call `observation.refresh()` after the first send, or the first reply never appears.
+- **Reasoning is context.** If the model emits reasoning blocks, they're replayed to it on the next turn, so they count against the context window. The inspector shows them labelled `[reasoning]`.
+- **Redaction is by pattern only.** The stored snapshot scrubs things that look like secrets (`Bearer` tokens, `sk-` keys, JWTs). A secret that matches no pattern is stored as-is.
+- **Deleting a conversation doesn't erase it.** It removes the row from the index. The agent's durable object, its stored stream and storage consumed by the SQLite in the durable object remain.  A clean-up task could be added server-side to remove the durable object and its SQLite on a cron job.
+- **Gateway attribution got worse.** In Part 1 every model call was logged against the verified user. In Part 2 the model provider is registered once at module scope, before any request exists, and Flue has no per-request hook for gateway metadata. Calls still go through the named AI Gateway and still carry a cost, but they're attributed to the gateway and not to a person.  You can wrap the model call in a function that adds the gateway metadata to fix this, but it introduces complexity I didn't want to deal with for this demo.
+
+## This is not an agent yet.
+
+This is the same app as before, but using the Flue framework. An agent is a multi-turn loop that allows the model to interact with its environment. With no tools, every answer is still a single model call: the model reads the transcript, writes some text and stops. This is still an improvement over a chat app that forgets everything on a reload, but it's not an agent yet.  In the next article we'll add tools and the model will be able to act on the world.  In the meantime, you can see the full deployable code on [GitHub](https://github.com/adrianhall/cf-demos/tree/coding-agent/part-2/flue-demos/coding-agent).
+
