@@ -21,9 +21,9 @@ I built a chat app that is deliberately not an agent in [Part 1](/posts/2026/202
 
 ## Agent frameworks are the new web frameworks
 
-You can write an agent loop by hand. It's about sixty lines: call the model, check for tool calls, run them, append the results, go around again. I'll show you what that looks like when we get to tools in Part 3. But you wouldn't build a production web app by parsing HTTP requests yourself, and for the same reason you probably don't want to hand-roll the part of an agent that has to survive a crashed process, stream tokens to a browser, resume after a deploy, and keep the transcript somewhere durable.
+You can write an agent loop by hand. It's about sixty lines: call the model, check for tool calls, run them, append the results, go around again. You wouldn't build a web app by parsing HTTP requests yourself, and for the same reason you probably don't want to hand-roll the part of an agent that has to survive a crashed process, stream tokens to a browser, resume after a deploy, and keep the transcript somewhere durable. That's a lot of boiler plate code that can be abstracted away easily.
 
-That's what an agent framework is for, and the comparison with web frameworks is a good one. Early on there were a handful of them and they were pretty basic. As time progressed, the number of frameworks grew - some got more "batteries included" and some were more bare-bones. They don't just differ in syntax; they differ in their **mental model** of what an app is (pages? components? routes? islands?), and that decides what's easy and what's a fight. Agent frameworks are at the same point right now. Some give you a base class to extend. Some give you a declarative function that describes what the agent knows. Some are a toolkit of primitives and little else. Expect more of them, and expect them to keep changing quickly.
+That's what an agent framework is for, and the comparison with web frameworks is a good one. Early on there were a handful of web frameworks and they were pretty basic. As time progressed, the number of frameworks grew - some got more "batteries included" and some were more bare-bones. They don't just differ in syntax; they differ in their mental model of what an app is and how it interacts with the backend and the user (pages? components? routes? islands?). Agent frameworks are at the same point right now. Some give you a base class to extend. Some give you a declarative function that describes what the agent knows. Some are a toolkit of primitives and little else. I expect more frameworks to be released.  The right one for you depends on the mental model you want to work in.
 
 Cloudflare's own description of how the pieces stack is a useful map:
 
@@ -56,7 +56,9 @@ export class MyAgent extends Think {
 
 The [Flue Framework](https://flueframework.com/) comes from the team behind Astro, and it shows. It's an agent framework, not just a harness: it has a project structure, a CLI, a Vite plugin, and an ecosystem of integrations (Slack, GitHub, databases, sandboxes). The loop itself comes from [Pi](https://pi.dev/), the open harness that OpenClaw is built on. It targets Cloudflare through the Agents SDK, so each Flue agent becomes a Durable Object that gets the SDK's durable execution for free.
 
-What makes it different is the mental model. You don't script what the agent *does*. You describe what it *knows*. An agent is a function that declares its model, tools, skills and instructions, and returns a system prompt:
+The Flue Framework is the most declarative of the three. You don't extend a class or write a loop. You write a function that declares what the agent has, and Flue generates the Durable Object class and the loop for you. 
+
+An agent is a function that declares its model, tools, skills and instructions, and returns a system prompt:
 
 ```ts
 export function MyAssistant() {
@@ -75,8 +77,9 @@ That doesn't make the other two the wrong choice. If you want the shortest path 
 
 ## What changes from Part 1
 
-[Part 1](/posts/2026/2026-10-30-coding-agent-part-1.html) and Part 2 are a before-and-after pair. The 
-[full diff is on GitHub](https://github.com/adrianhall/cf-demos/compare/coding-agent/part-1...coding-agent/part-2).
+Since I am using an agent framework for all my coding now, I'll just describe the changes between part 1 and part 2. The code is on GitHub, so you can see the full diff.  I recommend pointing your own agent at the code and getting it to describe the changes for you.
+
+[Part 1](/posts/2026/2026-10-30-coding-agent-part-1.html) and Part 2 are a before-and-after pair. The [full diff is on GitHub](https://github.com/adrianhall/cf-demos/compare/coding-agent/part-1...coding-agent/part-2).
 
 In Part 1, the browser is the memory and the Worker is stateless:
 
@@ -119,7 +122,7 @@ In Part 2, the conversation moves to the server and the browser only watches it:
 
 **The UI stopped owning the conversation.** The Pinia store no longer keeps a message list to send back. It *observes* the conversation instead: it opens a connection to the agent, receives the transcript as it grows, and sends only the new message. Flue's browser client (`@flue/sdk`) does this with `observe()`. It reads the conversation's history first and then follows it live by observing the SSE (server-side events) stream from the server-side agent. A reload, or a second browser, shows the same thing.
 
-**The transcript moved into the Durable Object's SQLite.** The short-term memory I described in Part 1 (which was stored in-browser using Pinia) now has a home in the SQLite database attached to that conversation's Durable Object. When the durable object is evicted and woken up again, or the browser refreshes, the conversation is still there.
+**The transcript moved into the Durable Object's SQLite.** The short-term memory I described in Part 1 (which was stored in-browser using Pinia) now has a home in the SQLite database attached to that conversation's Durable Object. The conversation survives browser refresh or when the durable object is evicted and woken up again.
 
 ### One Durable Object per conversation
 
@@ -136,7 +139,7 @@ Every conversation is its own Durable Object, addressed by the conversation id. 
 
 Durable objects suit agents because of what they bring to the process. Conversations are isolated from each other: they don't share memory, and one noisy agent can't slow another down. Each conversation has its own storage, so there's no shared database to design and no row-level scoping to get wrong. Idle conversations cost nothing because the object is evicted, and a conversation with a model call in flight can keep running with no browser attached.
 
-There's one second, small Durable Object: `ConversationIndex`, one per owner, which holds the list of that person's conversations and nothing else. Flue has no API to list conversations, so the app needs somewhere to keep the list. Conversation ids are `<ownerKey>.<ULID>`, where `ownerKey` is a prefix of a hash of the verified Access identity. The server issues them, so the client never picks one. A middleware compares the id's owner prefix with the caller's own before the request is allowed anywhere near the agent.  This could easily have been a D1 table or a KV namespace as well.  Each of these has their own tradeoffs, but I chose a Durable Object because it is the same pattern as the agent itself.
+There's one second, small Durable Object: `ConversationIndex`.  One is created per user and holds the list of that person's conversations within its SQLite database. Flue has no API to list conversations, so the app needs somewhere to keep the list. Conversation ids are  server generated - `<ownerKey>.<ULID>`, where `ownerKey` is a prefix of a hash of the verified Access identity. A middleware compares the id's owner prefix with the caller's own before the request is allowed anywhere near the agent.  At my scale, this could have been done in a D1 database instead.
 
 ### Terraform didn't change
 
@@ -150,7 +153,7 @@ Durable Objects are declared in the Wrangler config, not in Terraform, so the in
 
 ## The code
 
-This code is not complete.  I've removed error handling, logging, and other details to keep the diff small.  The full code is available on [GitHub](https://github.com/adrianhall/cf-demos/tree/coding-agent/part-2/flue-demos/coding-agent).
+This code snippets are not complete.  I've removed error handling, logging, and other details to keep the diff small.  The full code is available on [GitHub](https://github.com/adrianhall/cf-demos/tree/coding-agent/part-2/flue-demos/coding-agent).
 
 ### Wiring Flue into the build
 
@@ -164,7 +167,7 @@ export default {
 };
 ```
 
-The second is the Vite config. The order matters here.  The Cloudflare Access plugin must come first, so that the Access JWT is available to the Flue plugin when it runs.  The Flue plugin must come before the Cloudflare plugin, so that it can generate the Durable Object classes and hand them to the Cloudflare plugin.
+The second is the Vite config. The Cloudflare Access plugin must come first so that the Access JWT is available to the Flue plugin when it runs.  The Flue plugin must come before the Cloudflare plugin so that it can generate the Durable Object classes and hand them to the Cloudflare plugin.
 
 ```ts
 // vite.config.ts
@@ -233,9 +236,12 @@ import { Assistant } from './agents/assistant';
 
 const app = new Hono<AppBindings>();
 
-app.use(accessMiddleware);                 // 1. Cloudflare Access JWT, always first
-app.use('/api/*', requireAdmin);           // 2. only ADMIN_EMAIL
-app.use('/api/*', conversationScope(conversationService, costSource)); // 3. owner key from identity
+// Validate the Cloudflare Access JWT - always check first
+app.use(accessMiddleware);
+// Require the caller to be in the allow-list of users
+app.use('/api/*', requireAdmin);
+// Get the owner key from the verified identity and attach it to the request context
+app.use('/api/*', conversationScope(conversationService, costSource));
 
 app.use('/api/agent/assistant/*', agentMountAuthorization());
 app.route('/api/agent/assistant', createAgentRouter(Assistant));
@@ -322,9 +328,10 @@ The write is synchronous and local, so it can't be lost to an un-awaited promise
 A few details are worth knowing before you build on this:
 
 - **A brand-new conversation looks empty.** A conversation nobody has written to has no history, so `observe()` settles into an `absent` phase and stops. The agent is created when the first message is received. The client has to call `observation.refresh()` after the first send, or the first reply never appears.
-- **Reasoning is context.** If the model emits reasoning blocks, they're replayed to it on the next turn, so they count against the context window. The inspector shows them labelled `[reasoning]`.
+- **Reasoning becomes context.** If the model emits reasoning blocks, they're replayed to it on the next turn, so they count against the context window. The inspector shows them labelled `[reasoning]`.
 - **Deleting a conversation doesn't erase it.** It removes the row from the index. The agent's durable object, its stored stream and storage consumed by the SQLite in the durable object remain.  A clean-up task could (and probably should) be added server-side to remove the durable object and its SQLite on a cron job.
-- **Gateway attribution got worse.** In Part 1 every model call was logged against the verified user. In Part 2 the model provider is registered once at module scope, before any request exists, and Flue has no per-request hook for gateway metadata. Calls still go through the named AI Gateway and still carry a cost, but they're attributed to the gateway and not to a person.  You can wrap the model call in a function that adds the gateway metadata to fix this, but it introduces complexity I didn't want to deal with for this demo.
+
+Finally, a note on cost. The model is still called once per answer, and the cost is still charged to the same named AI Gateway as before. But the attribution has changed. In Part 1 every model call was logged against the verified user - this is likely what you want. The Flue Framework has no per-request hook for gateway metadata. Calls still go through the named AI Gateway and still carry a cost, but they're attributed to the gateway and not to a person.  You can wrap the model call in a function that adds the gateway metadata to fix this, but it introduces complexity I didn't want to deal with for this demo.
 
 ## This is not an agent yet.
 
