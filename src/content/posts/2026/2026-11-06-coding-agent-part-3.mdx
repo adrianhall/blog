@@ -1,0 +1,224 @@
+---
+title: "How to Add Tools to the Agent"
+date: 2026-11-06
+categories:
+  - AI
+tags:
+  - agentic-coding
+mermaid: true
+---
+
+import CodingAgentToc from '../../../components/series/2026-coding-agent-toc.mdx';
+import Mermaid from '../../../components/Mermaid.astro';
+
+I'm currently working my way through writing a coding agent as an exercise into what is required from beginning to end.  In [the last article](/posts/2026/2026-11-03-coding-agent-part-2.html), I moved the chat bot into an agentic framework. The model can't do anything useful without tools.  In this article I'm going to give the agent a couple of ad-hoc tools. The model will use them to answer questions it couldn't answer before.
+
+![How to add tools to the agent](/assets/images/2026/Nov06-banner.jpg)
+
+<CodingAgentToc />
+
+Everything that allows an agent to act is a tool, which makes this article foundational to how agents work. Everything that comes after this (a sandbox, memory, skills, MCP) is a tool in disguise. If you understand how a tool gets from your code into the model's context and back again, you understand how all of the rest works.
+
+## Tools change the context
+
+A model is a function. It takes a context (the system prompt plus the transcript) and returns text. Given the same context, you get roughly the same answer. If the only way to change the answer is to change the context, then the interesting question is *what changes it*.
+
+In a chat app, only the user changes the context through their interactions with the model. They type a message and it's appended to the transcript. In an agent, the model gets to change its own context. Each response from the model can be a request to run a tool, which then causes the agent to run the tool, append the result to the transcript, and then call the model again.  The model now sees the original request plus the results from all the tool calls.
+
+<Mermaid code={`sequenceDiagram
+    autonumber
+    participant U as User
+    participant H as Harness
+    participant M as Model
+    participant T as Tool
+
+    U->>H: What time is it?
+    H->>M: System prompt + tool definitions + transcript
+    M-->>H: Tool call: get_current_time()
+    H->>T: Run it
+    T-->>H: { now: "2026-11-06T09:00:00Z" }
+    H->>M: Same context + the tool call + the result
+    M-->>H: "It's 9:00 AM UTC."
+    H-->>U: Final reply
+`} />
+
+The same agentic loop is used, but the second model call has a *different context* from the first. The tool result is information that wasn't in the model's training data and wasn't in anything the user typed. A tool is a way to augment the context on demand.
+
+Two consequences follow from this:
+
+- **Tools cost context.** The model can only choose a tool it knows about, so every tool's name, description and input schema is sent on *every* model call. A tool you never use still costs tokens.
+- **Results stay in the transcript.** A tool result is just another message. It's replayed on every later turn until the transcript is compacted. A tool that returns a lot of text is expensive for the rest of the conversation, not just for the turn that asked for it.
+
+Neither of these is a reason to avoid tools. However, they are the reason I built the context inspector as part of the coding agent.  The context inspector shows how the context morphs over every loop and what it costs in tokens.  It's a useful tool for understanding how the model sees the conversation and how it uses tools.
+
+## The loop is simple
+
+You don't need a framework to see how small the loop is. Here's a sketch (not code from the repo) of the whole thing:
+
+```ts
+async function runAgent(transcript: Message[], tools: Tool[]): Promise<string> {
+  for (let step = 0; step < MAX_STEPS; step++) {
+    const reply = await callModel({ messages: transcript, tools: describe(tools) });
+    transcript.push(reply);                      // the model's turn joins the transcript
+
+    if (reply.toolCalls.length === 0) {
+      return reply.text;                         // stop condition: text and no tool calls
+    }
+
+    for (const call of reply.toolCalls) {
+      const tool = tools.find((t) => t.name === call.name);
+      const result = tool
+        ? await tool.run(call.arguments).catch((e) => `error: ${e.message}`)
+        : `error: no such tool ${call.name}`;
+      transcript.push({ role: 'tool', callId: call.id, content: result });
+    }
+  }
+  throw new Error('step limit reached');
+}
+```
+
+There are only three things to notice:
+
+1. The model is only ever asking for a tool to run. Your code decides whether the tool exists and what it does.
+2. The loops ends when the model stops asking for tools, or when a maximum number of steps is reached.
+3. If a tool fails, the failure message becomes part of the context.
+
+Flue runs this loop for us. Our only job is to write the tool and then to tell Flue about it.
+
+## Anatomy of a tool
+
+A tool has three parts:
+
+1. A name,
+2. Metadata - a description and input schema that the model reads,
+3. A `run` function that your code executes. 
+
+Only the first two go to the model.
+
+The description is the most important line you will write. The model never sees your code, so the description is its only evidence for when to call the tool. A vague description gets a tool that's never called, or called at the wrong time.
+
+Flue's `defineTool` takes a [Valibot](https://valibot.dev) schema for the input, and an optional one for the output. Here's the smallest tool I could think of, one that returns the current time:
+
+```ts
+// src/worker/tools/get-current-time.ts
+import * as v from 'valibot';
+import { defineTool } from '@flue/runtime/tool';
+
+export function getCurrentTimeTool(clock: Clock) {
+  return defineTool({
+    name: 'get_current_time',
+    description:
+      'Returns the current UTC time as an ISO 8601 string. Use when the user asks what time or date it is, or when an answer depends on today.',
+    input: v.object({}),
+    output: v.object({ now: v.string() }),
+    run() {
+      return { output: clock.currentTime() };
+    }
+  });
+}
+```
+
+There's no argument, so the input schema is an empty object. The description says what it returns, and (importantly) when to use it. `Clock` is a tiny class that wraps `new Date()`. I inject it so a test can control the time, but you could inline it.
+
+It's a deliberately silly tool. A model can't know what time it is, so it's an honest example of a gap that a tool fills, and nothing else is going on to distract from the mechanics.
+
+### Mounting the tool
+
+An agent declares its tools with the `useTool` hook, in the same way it declared `useModel` in Part 2. The whole change to the agent file is one loop and one sentence in the prompt:
+
+```ts
+// src/agents/assistant.ts
+export function Assistant(): string {
+  useModel(MODEL.flue);
+  useResponseFinish(({ response }) => ({ usage: response.usage }));
+
+  for (const tool of registeredTools()) useTool(tool);   // new in Part 3
+
+  return 'You are a helpful assistant. Keep replies short. Use your tools when a question needs the current time or the Cloudflare documentation.';
+}
+```
+
+The tools are built in the application's composition root (`src/app.ts`) and handed to the agent through a small registration function that I wrote, `registerTools()`. The agent module can't import the composition root without creating an import cycle, and I want the tools built over real dependencies (the clock, `fetch`) in one place so tests can swap in fakes. If your agent is simpler, you can build the tools right in the agent file.
+
+## A tool that does something useful
+
+The tool to return the current time is basically a toy to prove out the process. My second tool is `fetch_doc`, which reads a page from the Cloudflare documentation. A coding agent that's working with Cloudflare wants to look things up instead of guessing from stale training data, which is the same advice I gave in my post on [setting up for agentic coding](/posts/2026/2026-08-14-agentic-setup.html).
+
+Here's the tool:
+
+```ts
+// src/worker/tools/fetch-doc.ts
+export function fetchDocTool(docs: DocFetcher) {
+  return defineTool({
+    name: 'fetch_doc',
+    description:
+      'GET one page of the Cloudflare developer documentation by path, for example /kv/ or /workers/runtime-apis/bindings/. Pass a path, not a URL: the host is fixed. Returns the page as markdown, cut at 16 KiB. Use when the user asks about a Cloudflare product and the answer should come from the documentation.',
+    input: v.object({
+      path: v.pipe(
+        v.string(),
+        v.description('A path on developers.cloudflare.com starting with a single slash. Never a URL.')
+      )
+    }),
+    output: v.object({
+      path: v.string(),
+      status: v.number(),
+      contentType: v.string(),
+      text: v.string(),
+      truncated: v.boolean()
+    }),
+    async run({ data, signal }) {
+      return { output: await docs.fetchDoc(data.path, signal) };
+    }
+  });
+}
+```
+
+Again, the description is the most important part. It tells the model what to pass in `path`, and what to expect back. The input schema is a single string, and the output schema is a small object with the page's metadata and text.
+
+### The model's arguments are not a security boundary
+
+Everything the model puts in `data.path` was written by a language model that has been reading untrusted text. It could be wrong, or it could have been steered by something it read. If I let the model pass a URL, then "fetch a doc" becomes "make an HTTP request to anywhere, from inside my Worker", and I've handed the model (and anyone who can influence it) a server-side request forgery tool.
+
+So the tool is built the other way round. The host (`developers.cloudflare.com`) is a constant in code. The model supplies only a path, and the code decides what is allowed:
+
+- **A strict path rule.** A pure function accepts something that looks like an absolute path and refuses anything else. Tools never trust the model's arguments - it's untrusted input.
+- **An allowlist on every hop.** The tool follows redirects by hand, and re-checks the scheme, host, port and credentials on each hop. A redirect to another host is refused.  
+- **A real status check.** The docs site answers a missing page with a markdown body, so a 404 looks like a page. The tool throws on any non-2xx status.
+
+None of that logic lives in the tool. The tool is a thin adapter: it checks that the argument has the right *shape* and calls a `DocFetcher` use case, which holds the rules. If I later expose the same capability some other way, the rules come with it.
+
+### A refusal should teach the model
+
+When a tool throws, the error goes back to the model as the tool's result. The model reads it, and decides what to do next. That makes the error message part of your interface, so write it for the model.
+
+In my testing, Kimi K2.6 sometimes passed a full URL or a `//host/path` to the `fetch_doc` tool, even though the description says not to. Rather than a generic "invalid input", the path validator names the rule:
+
+```ts
+if (path.startsWith('//')) {
+  throw new DocPathError('path must not start with //; pass a path such as /kv/, not a URL');
+}
+```
+
+On my deployment I gave the agent a URL on purpose. It was refused with that message, and on the next turn it called the tool again with a path. The extra turn costs a little time and a few tokens, but the model never reaches another host and learns from its mistakes. Validation should be deterministic and belongs in the domain code.  Error messages teach the model how to recover.
+
+## Watching the loop
+
+Ask "what time is it?" and the response header shows two model calls. The first produced a tool call, and the second turned the result into an answer. In the message list, the tool call appears as a card: the tool's name, its input, its output (or error) and how long it took, with the state in words as it streams.
+
+The context explorer also gained a **Tools** tab, which lists each tool with its description, input schema and an estimate of how many tokens it costs. In the Context tab there are three new colours: tool definitions, tool calls and tool results. The tool result segment is the one that grows: when fetch_doc returns a 16 KiB page, it sits in the context bar and stays there for the rest of the conversation. 
+
+### One call per tool call? Not quite
+
+It's tempting to assume that N tool calls means N+1 model calls. That isn't what happens. Both models I tested (Kimi K2.6 and GLM 5.3 Flash) can ask for several independent tools **in a single turn**. If I ask "what time is it, and what's on the `/kv/` page?", the model asks for both at once.
+
+### Tools you didn't write
+
+Open the Context tab on a brand-new conversation and you'll see a tool that you didn't define. Flue always offers the model a framework tool named `task` for handing work to a subagent. My agent has no subagents, so the model has nowhere to send it, but the definition is still sent on every call and costs tokens.
+
+## The code
+
+The full diff between Part 2 and Part 3 is [on GitHub](https://github.com/adrianhall/cf-demos/compare/coding-agent/part-2...coding-agent/part-3), and the finished code is at the [`coding-agent/part-3` tag](https://github.com/adrianhall/cf-demos/tree/coding-agent/part-3/flue-demos/coding-agent).
+
+## What's next
+
+The agent can now act, but it can only do two things, and neither is very dangerous. Everything else is a tool. In Part 4 I'll give it a place to run commands and edit files, so it turns into a coding agent finally.
