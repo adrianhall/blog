@@ -7,7 +7,7 @@ tags:
   - cloudflare
 ---
 
-Today, I am continuing my deep-dive into every aspect of the [Cloudflare Developer Platform](https://developers.cloudflare.com/directory/?product-group=Developer+platform) by getting to grips with the AI inference capabilities of the platform.  To do this, I've written [a small AI Chat app](https://github.com/adrianhall/CF-AIChat) that you can quickly deploy to your own Cloudflare dashboard if you like.  Let's take a look at some of the learnings today.
+Today, I am continuing my deep-dive into every aspect of the [Cloudflare Developer Platform](https://developers.cloudflare.com/directory/?product-group=Developer+platform) by getting to grips with the AI inference capabilities of the platform.  To do this, I've written [a small AI Chat app](https://github.com/adrianhall/cf-demos/tree/main/cf-terraform-demos/chat) that you can quickly deploy to your own Cloudflare dashboard if you like.  Let's take a look at some of the learnings today.
 
 ![Introduction to Cloudflare AI Gateway](/assets/images/2026/Apr29-banner.png)
 
@@ -16,6 +16,11 @@ My intent with todays investigation was to make an app that looks like one of th
 - Private chats - no data should go outside the chat system.
 - Per user cost analysis - users should know what their spend is.
 - Selectable models.
+
+> **Note**:
+>
+> Since this article was first written, I've updated the demo to use the latest features of Cloudflare Dev Platform.  The basics of
+> the app are still the same, but the code is different.  Check out the [new demo](https://github.com/adrianhall/cf-demos/tree/main/cf-terraform-demos/chat)!
 
 ## Cloudflare services
 
