@@ -11,7 +11,7 @@ mermaid: true
 import CodingAgentToc from '../../../components/series/2026-coding-agent-toc.mdx';
 import Mermaid from '../../../components/Mermaid.astro';
 
-I'm currently working my way through writing a coding agent as an exercise into what is required from beginning to end.  In the last article, I moved the chat bot into an agentic framework. The model can't do anything useful without tools.  In this article I'm going to give the agent a couple of ad-hoc tools. The model will use them to answer questions it couldn't answer before.
+I'm currently working my way through writing a coding agent as an exercise into what is required from beginning to end.  In [the last article](/posts/2026/2026-11-03-coding-agent-part-2.html), I moved the chat bot into an agentic framework. The model can't do anything useful without tools.  In this article I'm going to give the agent a couple of ad-hoc tools. The model will use them to answer questions it couldn't answer before.
 
 ![How to add tools to the agent](/assets/images/2026/Nov06-banner.jpg)
 
@@ -142,7 +142,7 @@ The tools are built in the application's composition root (`src/app.ts`) and han
 
 ## A tool that does something useful
 
-The clock is a toy. The second tool is `fetch_doc`, which reads a page from the Cloudflare documentation. A coding agent that's working with Cloudflare wants to look things up instead of guessing from stale training data, which is the same advice I gave in my post on [setting up for agentic coding](/posts/2026/2026-08-14-agentic-setup.html).
+The tool to return the current time is basically a toy to prove out the process. My second tool is `fetch_doc`, which reads a page from the Cloudflare documentation. A coding agent that's working with Cloudflare wants to look things up instead of guessing from stale training data, which is the same advice I gave in my post on [setting up for agentic coding](/posts/2026/2026-08-14-agentic-setup.html).
 
 Here's the tool:
 
@@ -187,11 +187,11 @@ So the tool is built the other way round. The host (`developers.cloudflare.com`)
 
 None of that logic lives in the tool. The tool is a thin adapter: it checks that the argument has the right *shape* and calls a `DocFetcher` use case, which holds the rules. If I later expose the same capability some other way, the rules come with it.
 
-### A refusal should teach
+### A refusal should teach the model
 
 When a tool throws, the error goes back to the model as the tool's result. The model reads it, and decides what to do next. That makes the error message part of your interface, so write it for the model.
 
-In my testing, Kimi K2.6 sometimes passed a full URL or a `//host/path` to this tool, even though the description says not to. Rather than a generic "invalid input", the path validator names the rule:
+In my testing, Kimi K2.6 sometimes passed a full URL or a `//host/path` to the `fetch_doc` tool, even though the description says not to. Rather than a generic "invalid input", the path validator names the rule:
 
 ```ts
 if (path.startsWith('//')) {
@@ -199,7 +199,7 @@ if (path.startsWith('//')) {
 }
 ```
 
-On my deployment I gave the agent a URL on purpose. It was refused with that message, and on the next turn it called the tool again with a path. The extra turn costs a little time and a few tokens, but the model never reaches another host. Validation should be deterministic and belongs in the domain code.  Error messages teach the model how to recover.
+On my deployment I gave the agent a URL on purpose. It was refused with that message, and on the next turn it called the tool again with a path. The extra turn costs a little time and a few tokens, but the model never reaches another host and learns from its mistakes. Validation should be deterministic and belongs in the domain code.  Error messages teach the model how to recover.
 
 ## Watching the loop
 
@@ -209,9 +209,7 @@ The context explorer also gained a **Tools** tab, which lists each tool with its
 
 ### One call per tool call? Not quite
 
-It's tempting to assume that N tool calls means N+1 model calls. That isn't what happens. Both models I tested (Kimi K2.6 and GLM 5.3 Flash) can ask for several independent tools **in a single turn**. If I ask "what time is it, and what's on the `/kv/` page?", the model asks for both at once. That's two model calls: one that requests both tools and one that writes the answer.
-
-A *dependent* chain is different. If the model has to read a page and then follow a link from it, it can't know the second path until the first result is back, so each hop costs another model turn.
+It's tempting to assume that N tool calls means N+1 model calls. That isn't what happens. Both models I tested (Kimi K2.6 and GLM 5.3 Flash) can ask for several independent tools **in a single turn**. If I ask "what time is it, and what's on the `/kv/` page?", the model asks for both at once.
 
 ### Tools you didn't write
 
