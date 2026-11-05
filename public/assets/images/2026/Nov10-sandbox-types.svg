@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 300" width="720" height="300" role="img" aria-labelledby="title desc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <title id="title">Dynamic Workers compared with container sandboxes</title>
+  <desc id="desc">Two boxes side by side. A Dynamic Worker runs JavaScript, Python or WebAssembly, receives only the bindings you pass in, and has no shell or filesystem. A container sandbox runs any Linux program, has a shell, files, git and npm, and can keep processes running.</desc>
+
+  <!-- Dynamic Worker: Cloudflare orange -->
+  <rect x="10" y="10" width="340" height="280" rx="14" fill="#F6821F"/>
+  <text x="180" y="52" text-anchor="middle" font-size="22" font-weight="700" fill="#1a1a1a">Dynamic Worker</text>
+
+  <rect x="34" y="78" width="292" height="50" rx="8" fill="#ffffff"/>
+  <text x="180" y="108" text-anchor="middle" font-size="16" fill="#1a1a1a">JavaScript, Python or Wasm</text>
+
+  <rect x="34" y="144" width="292" height="50" rx="8" fill="#ffffff"/>
+  <text x="180" y="174" text-anchor="middle" font-size="16" fill="#1a1a1a">Bindings you pass in</text>
+
+  <rect x="34" y="210" width="292" height="50" rx="8" fill="#ffffff"/>
+  <text x="180" y="240" text-anchor="middle" font-size="16" fill="#1a1a1a">No shell, no filesystem</text>
+
+  <!-- Container sandbox: Docker blue -->
+  <rect x="370" y="10" width="340" height="280" rx="14" fill="#2496ED"/>
+  <text x="540" y="52" text-anchor="middle" font-size="22" font-weight="700" fill="#0b1a2b">Container sandbox</text>
+
+  <rect x="394" y="78" width="292" height="50" rx="8" fill="#ffffff"/>
+  <text x="540" y="108" text-anchor="middle" font-size="16" fill="#1a1a1a">Any Linux program</text>
+
+  <rect x="394" y="144" width="292" height="50" rx="8" fill="#ffffff"/>
+  <text x="540" y="174" text-anchor="middle" font-size="16" fill="#1a1a1a">Processes that keep running</text>
+
+  <rect x="394" y="210" width="292" height="50" rx="8" fill="#ffffff"/>
+  <text x="540" y="240" text-anchor="middle" font-size="16" fill="#1a1a1a">Shell, files, git, npm</text>
+</svg>

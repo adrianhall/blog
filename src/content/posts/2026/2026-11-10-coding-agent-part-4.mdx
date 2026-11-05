@@ -1,0 +1,323 @@
+---
+title: "Let the Agent Run Untrusted Code"
+date: 2026-11-10
+categories:
+  - AI
+tags:
+  - agentic-coding
+mermaid: true
+---
+
+import CodingAgentToc from '../../../components/series/2026-coding-agent-toc.mdx';
+import Mermaid from '../../../components/Mermaid.astro';
+
+Welcome to Part 4 of my seven-part series on how to write a coding agent on the Cloudflare Dev Platform. In [Part 3](/posts/2026/2026-11-06-coding-agent-part-3.html) I introduced tools and gave the agent a couple of them. Both are safe because they can't do much, but they are also of little use for my main aim of getting the model to write code. A coding agent needs more than the ability to tell the time. It needs to clone a repository, run its tests, install its dependencies, and change its files. That means running commands the model wrote on a machine I don't want to trust. This article is about where those commands run.
+
+![Let the agent run untrusted code](/assets/images/2026/Nov10-banner.jpg)
+
+<CodingAgentToc />
+
+[Part 4](https://github.com/adrianhall/cf-demos/tree/coding-agent/part-4/flue-demos/coding-agent) adds a sandbox to our coding agent. Each conversation (or session) gets its own container. The agent can clone a public GitHub or GitLab repository into it, and the agent gains a set of tools that run inside that container. A Terminal tab opens a shell in the same container, so I can watch what the agent did and take over if I want to.
+
+This is where the demo becomes a coding agent.
+
+## What is a sandbox anyway?
+
+A sandbox is an isolated place to run code that you don't trust. The code can't read your application's memory or data. You decide what it can reach: which APIs it gets, which files it sees, and whether it can talk to the internet at all. The sandbox is the security boundary between your coding agent and everything else you run.
+
+Coding agents write untrusted code. Everything the model produces is shaped by what it read, and that might include text written by a malicious actor who wants to steer your agent to do something you didn't intend. A README can say "run this install script", and a model that trusts it will run the script. If the script runs in my Worker, it runs with my Worker's bindings. If it runs in a sandbox, it runs in a box that holds only what I put in it.
+
+Three properties make a sandbox useful, and I'll come back to each of them when I integrate it:
+
+1. **Isolation.** The code runs somewhere it can't reach the rest of the system.
+2. **Controlled inputs.** I decide what goes in: the files, the environment variables, and the bindings.
+3. **Controlled outputs.** I decide what comes back out and what can leave: the network hosts it may reach.
+
+## Dynamic Workers or containers?
+
+Cloudflare's documentation describes two sandbox environments - Dynamic Workers and containers - and they make different trade-offs. Both environments isolate code, but they differ in what the code can be.
+
+[Dynamic Workers](https://developers.cloudflare.com/dynamic-workers/) load a new Worker inside a V8 isolate at runtime. An isolate starts in milliseconds, runs JavaScript, Python or WebAssembly, and gets only the bindings I pass in. It's the lowest-level primitive for spinning up a Worker, and it's a good fit for running code I don't trust when the code is a function: take this input, compute that, return a result. It has no shell and no filesystem, because it isn't a computer. It's a function that happens to be sandboxed.
+
+[Containers](https://developers.cloudflare.com/containers/) run an image that I provide. The instance is a full Linux environment, so it has a shell, a filesystem, processes that keep running, and any language or tool I put in the image. Each instance is a microVM with its own kernel and its own network. It takes longer to start than an isolate (seconds instead of milliseconds), and it costs more to keep running. In exchange, it acts as a full computer.
+
+<figure class="center-image">
+  <img src="/assets/images/2026/Nov10-sandbox-types.svg" alt="Dynamic Workers run JavaScript, Python or Wasm with only the bindings you pass in and no shell or filesystem. Container sandboxes run any Linux program, with a shell, files, git and npm, and processes that keep running." width="720" height="300" />
+</figure>
+
+A coding agent needs a computer, not a function. It has to clone a repository, install its dependencies, run programs (like test runners) and read the output. It has to edit files and see the result on the next command. Those things need a filesystem and a shell, and a Dynamic Worker has neither.
+
+## What the Sandbox SDK gives you
+
+The platform gives you containers: you write a Dockerfile, Wrangler builds an image from it, and a Durable Object starts an instance of that image and runs commands in it through `this.ctx.container`. That is the runtime, and it's the part Cloudflare provides.
+
+The [Sandbox SDK](https://developers.cloudflare.com/sandbox/), `@cloudflare/sandbox`, adds the pieces that a coding agent needs on top of the container. It's a small package of classes that you create inside your Durable Object and hand the container to. Each class runs a helper program inside the running container (through `exec()`) to do its work.  For instance, **`Files`** reads, writes and manages files and directories in the container. This is how the agent's file tools reach the container's filesystem.
+
+The SDK does not start, stop or monitor the container. Your Durable Object does that, which means the policy decisions are yours: how long a container lives, what it can reach over the network, and what happens when a command fails. Those policies live in your Durable Object as code, which is where I want security decisions to be.
+
+The package has two requirements. The image must contain a helper binary, `sandbox-shim`, copied from the `cloudflare/sandbox` image with the matching version tag (you'll see this in the Dockerfile below), and the Worker needs the `nodejs_compat` flag.
+
+## Where the sandbox sits in the agent
+
+Before the code, here's the path a command takes. The agent never touches the container. It goes through the agent's Durable Object, which hands it to a second Durable Object that owns the container:
+
+<Mermaid code={`sequenceDiagram
+    autonumber
+    participant B as Browser
+    participant W as Worker (Access + checks)
+    participant A as Agent (Durable Object)
+    participant S as Sandbox (Durable Object)
+    participant C as Container
+
+    B->>W: Clone a repository
+    W->>S: Clone into this conversation's sandbox
+    S->>C: git clone (argument array, no shell)
+    W->>A: repository.attached signal
+    A->>A: Mount the sandbox for this conversation
+    A->>S: bash: npm test
+    S->>C: sh -c "npm test" (timeout)
+    C-->>S: stdout, stderr, exit code
+    S-->>A: Result
+    A-->>B: Answer, with the output in a tool card
+`} />
+
+The **Sandbox** Durable Object has no route of its own. The only way to reach it is through the Worker, which has already done all the security checks necessary to determine the validity of the request. Every Durable Object has a name, and the Sandbox name is computed on the server from the verified owner and the conversation id, so nothing a caller types can choose which container it reaches.
+
+The **agent** decides when a sandbox is needed. It isn't needed on every message, so it's only mounted once a repository has been attached.
+
+## What changes from Part 3
+
+Part 3's tools are still there (although you could remove them if you wanted). Part 4 adds a sandbox and the tools that the sandbox provides.
+
+The full diff is [on GitHub](https://github.com/adrianhall/cf-demos/compare/coding-agent/part-3...coding-agent/part-4).
+
+Inside the demo, the changes are:
+
+- **Container:** a `Dockerfile` for the sandbox image, and a `containers` entry in `wrangler.jsonc.tpl`.
+- **Durable Object:** a `Sandbox` class, bound as `SANDBOX`, with its own migration.
+- **Agent:** the sandbox is mounted once a repository is attached, and the agent answers the signal that announces it.
+- **Worker:** a repository route that clones into the sandbox, and a terminal route that upgrades to a WebSocket.
+- **Config:** a new `src/config.ts` that holds the egress allowlist, the timeouts and the workspace path.
+- **Client:** a repository form, a Terminal tab with xterm.js, and a tab-strip entry.
+
+Terraform didn't change. The container application is created by `wrangler deploy` and Terraform can't see it, so teardown has to delete it separately (more on that below).
+
+> **Docker must be running locally**
+>
+> `wrangler deploy` builds the sandbox image on your machine, so Docker has to be installed and running. If it isn't running, the deploy fails.
+
+## The image
+
+You decide what goes into the sandbox image. The demo starts from `node:24-trixie-slim`, which gives you Node.js and very little else. Everything else has to be added, and you may want to add more (Python tooling, for instance). The container is built from a Dockerfile in the demo:
+
+```dockerfile
+FROM node:24-trixie-slim
+
+# The helper @cloudflare/sandbox's Files class runs through exec(). Its tag must equal
+# the installed package version.
+COPY --from=docker.io/cloudflare/sandbox:1.0.3 /usr/local/bin/sandbox-shim /usr/local/bin/sandbox-shim
+
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends \
+		build-essential ca-certificates curl git less procps python3 tmux \
+	&& rm -rf /var/lib/apt/lists/* \
+	&& corepack enable
+
+RUN mkdir -p /workspace
+WORKDIR /workspace
+CMD ["sleep", "infinity"]
+```
+
+> **Why copy from `cloudflare/sandbox` instead of building on it?** It's natural to expect `docker.io/cloudflare/sandbox` to be a ready-made sandbox image that you extend with `FROM`. It used to be, but it isn't anymore. The image holds a single file, the `sandbox-shim` helper binary, and nothing else: no operating system, no shell, no package manager.  You need to provide a suitable base image.
+
+**The base node image has none of the tools the agent needs.** It does not include common tools like Git, `curl`, Python or even `ps`. The agent needs git to clone, `tmux` for the terminal, and build tools for native modules, so the Dockerfile installs them.
+
+**Alpine-based images will cause problems.** Flue's sandbox adapter runs `stat -c` and `find -printf` to read the workspace. Those are GNU flags, and Alpine's BusyBox tools don't support all of them, so the adapter's file operations fail in confusing ways on Alpine. Switching to Debian-based images with GNU coreutils and findutils avoids the problem.
+
+**The helper's tag has to match the package.** `sandbox-shim` comes from the `cloudflare/sandbox` image, and its tag must equal the version of `@cloudflare/sandbox` in `package.json`. It's easy to bump one and forget the other, so I added a test that checks they match.
+
+The `containers` entry in the Wrangler template is short:
+
+```jsonc
+// wrangler.jsonc.tpl (the part that changed)
+"durable_objects": {
+  "bindings": [
+    { "name": "CONVERSATION_INDEX", "class_name": "ConversationIndex" },
+    { "name": "SANDBOX", "class_name": "Sandbox" }
+  ]
+},
+"migrations": [
+  { "tag": "flue-class-FlueAssistantAgent", "new_sqlite_classes": ["FlueAssistantAgent"] },
+  { "tag": "app-class-ConversationIndex", "new_sqlite_classes": ["ConversationIndex"] },
+  { "tag": "app-class-Sandbox", "new_sqlite_classes": ["Sandbox"] }
+],
+"containers": [
+  {
+    "class_name": "Sandbox",
+    "scheduling_policy": "durable_object",
+    "images": { "workspace": { "dockerfile": "./Dockerfile" } }
+  }
+]
+```
+
+## The Sandbox Durable Object
+
+The `Sandbox` Durable Object holds the policy decisions. It starts the container, runs commands in it, reads and writes files, and clones repositories. It also manages the outbound network. The starting sequence is where most of the decisions are. I start the container with networking turned off, register the outbound intercepts, run a trust step (which adds Cloudflare's intercept certificate to the container's trust store, so HTTPS from inside the container works), and only then set the inactivity timeout:
+
+```ts
+this.#container.start({
+  image: this.#container.images['workspace'] ?? '',
+  instance: SANDBOX_INSTANCE,
+  env: ENV,
+  enableInternet: false
+});
+try {
+  await this.#intercept();
+  const trust = await this.#container.exec(TRUST);
+  if ((await trust.exitCode) !== 0) {
+    throw new Error('The container did not trust the intercept certificate.');
+  }
+  await this.#container.setInactivityTimeout(SANDBOX_INACTIVITY_TIMEOUT_MS);
+} catch (error) {
+  await this.#container.destroy();
+  throw error;
+}
+```
+
+If any step fails, the container is destroyed, so the next call starts a clean one.
+
+### Commands are arrays, and the array isn't a shell
+
+`container.exec()` takes an argument array and runs a command without a shell. That's a good default for security because a repository URL or a branch name can't turn into a second command. Flue's `bash` tool hands over a command string, and a command string needs a shell to mean what the model intended, with pipes, `&&` and so on. The `bash` tool wraps the `exec` method wraps the string in `sh -c`, and it bounds the whole thing with GNU `timeout`:
+
+```ts
+export function execArgs(command: string, timeoutMs?: number): string[] {
+  return ['timeout', '-k', '5', String(execTimeoutSeconds(timeoutMs)), 'sh', '-c', command];
+}
+```
+
+`-k 5` sends `SIGKILL` five seconds after `SIGTERM`, for a command that ignores the first signal. The model can start a command and forget about it, and a runaway process would hold the container open.  The timeout avoids that situation. 
+
+### Cloning is a separate path with no shell at all
+
+Cloning is different. The repository URL comes from the user, so I don't wrap it in a shell at all. The clone runs as an argument array, with `--` before the URL so that nothing in the URL can be read as an option:
+
+```ts
+export function cloneArgs(url: string, directory: string, branch?: string): string[] {
+  return [
+    'timeout', '-k', '5', '600',
+    'git', 'clone', '--filter=blob:none', '--depth', '1',
+    ...(branch === undefined ? [] : ['--branch', branch]),
+    '--', url, directory
+  ];
+}
+```
+
+The `--filter=blob:none --depth 1` pair gets a shallow, blobless clone. That's quick, and it's enough for an agent to read the code. The validation of the URL happens before this function runs. Only `https://github.com/<owner>/<repo>` and `https://gitlab.com/<namespace>/<project>` are accepted, with no credentials, no port, no query string, no encoded characters and no other host. The branch can't start with `-`, so it can't be read as an option either. Failures map to RFC 9457 problems, and git's own output is never returned to the browser, because it can contain paths and hints I don't want to expose.
+
+> **Note**: This coding agent does not support private repos or SSH connections - those are possible, but require additional work.
+
+## Egress: the sandbox can reach three hosts
+
+The container can't reach the internet unless `start()` says `enableInternet: true`. Instead of giving the sandbox the ability to connect to any host, I register a small outbound handler in the same Worker that filters the requests for me. The handler is a `WorkerEntrypoint`, and every HTTP and HTTPS request from the container goes through it:
+
+```ts
+export class SandboxOutbound extends WorkerEntrypoint {
+  override async fetch(request: Request): Promise<Response> {
+    const { hostname } = new URL(request.url);
+    if (!isAllowedHost(hostname, EGRESS_ALLOWLIST)) {
+      return new Response('Origin is disallowed', { status: 520 });
+    }
+    return await fetch(request);
+  }
+}
+```
+
+The allowlist is one constant in `src/config.ts`:
+
+```ts
+export const EGRESS_ALLOWLIST: readonly string[] = [
+  'github.com',
+  'gitlab.com',
+  'registry.npmjs.org'
+];
+```
+
+Two of those hosts are for cloning. The third is there because running a cloned project's tests almost always starts with an install, and an install needs the npm registry. Matching is exact, so `codeload.github.com` and `objects.githubusercontent.com` are not reachable. A shallow clone over smart HTTP needs only the host itself. The rule applies to everything running in the container. The agent's `bash` tool and the terminal share the same container, so the same allowlist covers both.
+
+The allowlist limits hosts, not what the agent does with them. Anything the agent can reach through `github.com` it can both fetch from and push to. The demo holds no credentials, so a push to someone else's repository would be refused, but the allowlist itself doesn't enforce read-only access. Limiting the HTTP methods won't do it either, because a `git clone` over HTTPS uses `POST` to fetch objects. If you add credentials, filter on the request path as well (git's push endpoint is `git-receive-pack`).
+
+## Mount the sandbox only when it's needed
+
+Flue reads the workspace when a sandbox is attached. It looks for `AGENTS.md`, for skills and for a directory listing. If I mount the sandbox on every message, the container starts on the first message in every conversation, including a plain "what's the time?" That's wasteful, and it means a container runs for every chat, even if that chat never touches code.
+
+To avoid premature scanning, the sandbox is mounted only after a repository is attached. The clone route sends the agent a `repository.attached` signal. The agent records the repository's path in persistent state, and on the next render it mounts the sandbox:
+
+```ts
+const [repository, setRepository] = usePersistentState<string | null>('repository', null);
+const delivery = useDelivery();
+useAgentStart(() => {
+  if (delivery.kind === 'signal' && delivery.type === REPOSITORY_ATTACHED) {
+    setRepository(delivery.attributes?.['path'] ?? SANDBOX_WORKSPACE);
+  }
+});
+if (repository !== null) {
+  useSandbox(conversationSandbox(), { cwd: SANDBOX_WORKSPACE });
+}
+```
+
+**The agent answers the signal.** The first thing I see after a clone is a short acknowledgement that the repository is ready. That's the agent reacting to a notification, the way it reacts to any message.  The conversation's sandbox is named from the owner and the conversation, and the name is computed on the server after the ownership check. It is never taken from a URL or a header, so a caller can't point the agent at someone else's container.
+
+## The agent gets six more tools
+
+Once the sandbox is mounted, Flue gives the agent its built-in sandbox tools: `read`, `write`, `edit`, `bash`, `grep` and `glob`. They run through the sandbox adapter, so `bash` runs in the container, and `read` reads from the container's filesystem.  These tools will be shown as tool definitions in the Context tab.
+
+Flue's adapter takes the sandbox through a small factory, and the factory is cheap to construct. Nothing starts until the first command:
+
+```ts
+function conversationSandbox(): ReturnType<typeof cloudflareSandbox> {
+  const id = getDurableObjectIdentity().name;
+  const binding = (env as unknown as { SANDBOX: SandboxBinding }).SANDBOX;
+  return {
+    createSandbox: async () => {
+      const name = await sandboxNameForConversation(id);
+      return await cloudflareSandbox(binding.getByName(name), {
+        cwd: SANDBOX_WORKSPACE
+      }).createSandbox({ id });
+    }
+  };
+}
+```
+
+The `id` comes from the agent's own Durable Object name, which is the conversation id. The agent's mount has already checked that the caller owns it.
+
+## The repository form
+
+The client gets a small form: a repository URL and an optional branch. It posts to `POST /api/conversations/:id/repository`, which sits under the same Access policy and administrator check as every other API route. The application layer validates the input, the domain layer decides whether it's a repository this demo accepts, and the Sandbox object runs the clone, handling any errors in the same way as an API.
+
+## The terminal
+
+I've added a Terminal tab alongside the Context tab to give me a shell in the sandbox container.  This allows me to watch and take over from the agent should I want to code myself.  The terminal follows Cloudflare recommendations and uses [xterm.js](https://xtermjs.org/) underneath. The Sandbox object accepts a WebSocket, and it runs `tmux new-session -A` through `container.exec()` with a pseudo-terminal. Binary frames carry raw terminal bytes in both directions, and a JSON text frame carries resize requests. The shell lives in a tmux session inside the container, so it survives a page reload or a dropped connection.
+
+## Teardown: the container is not in Terraform
+
+`wrangler deploy` creates the container application and pushes an image to the registry. Terraform can't see either one, so teardown has to delete them first. The [cloudflare-toolkit](https://adrianhall.github.io/cloudflare-toolkit/) that I wrote has a `destroy-containers` script that deletes the container application for you.
+
+## Watching it work
+
+The agent shows a sequence of model turns (each followed by tool cards) for a question about a cloned repository. 
+
+1. **Turn 1.** The model reads the question and asks for `bash` with `ls`.
+2. **Tool card.** The `bash` card shows the command, its output and its duration.
+3. **Turn 2.** The model reads the listing and asks for `read` on the README.
+4. **Turn 3.** It answers, and the header reads "3 model calls".
+
+The file the agent read is the file in the container. Open the Terminal tab and `cat` it, and you see the same bytes. An edit the agent makes with `edit` is visible to the terminal immediately, and so is anything I type. The terminal and the agent share the **filesystem**, not a shell. The agent's `bash` tool runs each command as a separate process in the same container. My terminal is a long-lived tmux session. So if I `cd` somewhere, the agent doesn't follow me.
+
+## Final thoughts
+
+A sandbox is a boundary you draw around code you don't trust. Dynamic Workers draw it around a function, and containers draw it around a computer. A coding agent needs a computer, so the agent gets a container. The Sandbox SDK doesn't run that container for you. It gives you the helpers and leaves the decisions to your code: how long the container lives, what it can reach, and what happens when a command goes wrong. That's more work, and it's also the place where the security decisions belong.
+
+The agent can now run commands, and it can make changes that stay in the container, so it's finally a coding agent, with a lot in common with other coding harnesses. In the next article, I'll talk about memory and how to extend the agent's memory beyond a single session.
+
+Until then, you can find the current code on [GitHub](https://github.com/adrianhall/cf-demos/tree/coding-agent/part-4/flue-demos/coding-agent).
