@@ -1,0 +1,6 @@
+{
+    "files.autoSave": "afterDelay",
+    "[mdx]": {
+        "editor.wordWrap": "on"
+    }
+}

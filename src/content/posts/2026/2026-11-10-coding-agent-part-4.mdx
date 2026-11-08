@@ -33,7 +33,7 @@ Three properties make a sandbox useful, and I'll come back to each of them when 
 2. **Controlled inputs.** I decide what goes in: the files, the environment variables, and the bindings.
 3. **Controlled outputs.** I decide what comes back out and what can leave: the network hosts it may reach.
 
-## Dynamic Workers or containers?
+## Dynamic workers or containers?
 
 Cloudflare's documentation describes two sandbox environments - Dynamic Workers and containers - and they make different trade-offs. Both environments isolate code, but they differ in what the code can be.
 
@@ -106,7 +106,7 @@ Terraform didn't change. The container application is created by `wrangler deplo
 >
 > `wrangler deploy` builds the sandbox image on your machine, so Docker has to be installed and running. If it isn't running, the deploy fails.
 
-## The image
+### The image
 
 You decide what goes into the sandbox image. The demo starts from `node:24-trixie-slim`, which gives you Node.js and very little else. Everything else has to be added, and you may want to add more (Python tooling, for instance). The container is built from a Dockerfile in the demo:
 
@@ -160,7 +160,7 @@ The `containers` entry in the Wrangler template is short:
 ]
 ```
 
-## The Sandbox Durable Object
+### The Sandbox Durable Object
 
 The `Sandbox` Durable Object holds the policy decisions. It starts the container, runs commands in it, reads and writes files, and clones repositories. It also manages the outbound network. The starting sequence is where most of the decisions are. I start the container with networking turned off, register the outbound intercepts, run a trust step (which adds Cloudflare's intercept certificate to the container's trust store, so HTTPS from inside the container works), and only then set the inactivity timeout:
 
@@ -217,7 +217,7 @@ The `--filter=blob:none --depth 1` pair gets a shallow, blobless clone. That's q
 
 > **Note**: This coding agent does not support private repos or SSH connections - those are possible, but require additional work.
 
-## Egress: the sandbox can reach three hosts
+### Control where the sandbox can connect
 
 The container can't reach the internet unless `start()` says `enableInternet: true`. Instead of giving the sandbox the ability to connect to any host, I register a small outbound handler in the same Worker that filters the requests for me. The handler is a `WorkerEntrypoint`, and every HTTP and HTTPS request from the container goes through it:
 
@@ -247,7 +247,7 @@ Two of those hosts are for cloning. The third is there because running a cloned 
 
 The allowlist limits hosts, not what the agent does with them. Anything the agent can reach through `github.com` it can both fetch from and push to. The demo holds no credentials, so a push to someone else's repository would be refused, but the allowlist itself doesn't enforce read-only access. Limiting the HTTP methods won't do it either, because a `git clone` over HTTPS uses `POST` to fetch objects. If you add credentials, filter on the request path as well (git's push endpoint is `git-receive-pack`).
 
-## Mount the sandbox only when it's needed
+### Mount the sandbox only when it's needed
 
 Flue reads the workspace when a sandbox is attached. It looks for `AGENTS.md`, for skills and for a directory listing. If I mount the sandbox on every message, the container starts on the first message in every conversation, including a plain "what's the time?" That's wasteful, and it means a container runs for every chat, even if that chat never touches code.
 
@@ -268,7 +268,7 @@ if (repository !== null) {
 
 **The agent answers the signal.** The first thing I see after a clone is a short acknowledgement that the repository is ready. That's the agent reacting to a notification, the way it reacts to any message.  The conversation's sandbox is named from the owner and the conversation, and the name is computed on the server after the ownership check. It is never taken from a URL or a header, so a caller can't point the agent at someone else's container.
 
-## The agent gets six more tools
+### The agent gets six more tools
 
 Once the sandbox is mounted, Flue gives the agent its built-in sandbox tools: `read`, `write`, `edit`, `bash`, `grep` and `glob`. They run through the sandbox adapter, so `bash` runs in the container, and `read` reads from the container's filesystem.  These tools will be shown as tool definitions in the Context tab.
 
@@ -291,17 +291,17 @@ function conversationSandbox(): ReturnType<typeof cloudflareSandbox> {
 
 The `id` comes from the agent's own Durable Object name, which is the conversation id. The agent's mount has already checked that the caller owns it.
 
-## The repository form
+### The repository form
 
 The client gets a small form: a repository URL and an optional branch. It posts to `POST /api/conversations/:id/repository`, which sits under the same Access policy and administrator check as every other API route. The application layer validates the input, the domain layer decides whether it's a repository this demo accepts, and the Sandbox object runs the clone, handling any errors in the same way as an API.
 
-## The terminal
+### The terminal
 
 I've added a Terminal tab alongside the Context tab to give me a shell in the sandbox container.  This allows me to watch and take over from the agent should I want to code myself.  The terminal follows Cloudflare recommendations and uses [xterm.js](https://xtermjs.org/) underneath. The Sandbox object accepts a WebSocket, and it runs `tmux new-session -A` through `container.exec()` with a pseudo-terminal. Binary frames carry raw terminal bytes in both directions, and a JSON text frame carries resize requests. The shell lives in a tmux session inside the container, so it survives a page reload or a dropped connection.
 
-## Teardown: the container is not in Terraform
+### Teardown: the container is not in Terraform
 
-`wrangler deploy` creates the container application and pushes an image to the registry. Terraform can't see either one, so teardown has to delete them first. The [cloudflare-toolkit](https://adrianhall.github.io/cloudflare-toolkit/) that I wrote has a `destroy-containers` script that deletes the container application for you.
+`wrangler deploy` creates the container application and pushes an image to the registry. Terraform can't see either one, so teardown has to delete them first. The [cloudflare-toolkit](https://adrianhall.github.io/cloudflare-toolkit/) package that I wrote has a `destroy-containers` script that deletes the container application for you.
 
 ## Watching it work
 
