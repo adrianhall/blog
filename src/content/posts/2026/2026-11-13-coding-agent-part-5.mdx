@@ -17,7 +17,7 @@ Welcome to Part 5 of my seven-part series on how to write a coding agent on the 
 
 <CodingAgentToc />
 
-[Part 5](https://github.com/adrianhall/cf-demos/tree/coding-agent/part-5/flue-demos/coding-agent) adds long-term memory to the coding agent. Each repository gets its own memory, and the agent gets tools to manage that memory. A **Learn this repository** button asks the agent to survey a repository and save what it finds, and a Memory tab lets me read (and delete) everything that was saved.  If you have used more common coding agents (like Claude Code or OpenCode), then the `AGENTS.md` file is a form of memory: you write down what the agent should know, and it reads that every time it starts. The difference here is that the agent can also discover facts about a repository and save them for later.
+[Part 5](https://github.com/adrianhall/cf-demos/tree/coding-agent/part-5/flue-demos/coding-agent) adds long-term memory to the coding agent. Each repository gets its own memory, and the agent gets tools to manage that memory. A **Learn this repository** button asks the agent to survey a repository and save what it finds, and a Memory tab lets me read (and delete) everything that was saved. If you have used more popular coding agents (like Claude Code or OpenCode), then the `AGENTS.md` file is a form of memory: you write down what the agent should know, and it reads that every time it starts. The difference here is that the agent can also discover facts about a repository and save them for later.
 
 ## Two kinds of memory
 
@@ -32,7 +32,7 @@ A model doesn't remember anything. Each call is a fresh function call whose only
 - the transcript: every user message, model reply, tool call and tool result so far in this conversation,
 - and anything the harness adds along the way (signals, skill catalogs and so on).
 
-Short-term memory is automatic. The harness builds it before every turn, and it's how the agent loop has been working since our original chat bot in part 1. It has two important properties:
+Short-term memory is automatic. The harness builds it before every turn, and it's how the agent loop has been working since our original chatbot in Part 1. It has two important properties:
 
 1. **It's bounded.** The context window has a size limit. When the transcript outgrows it, the harness has to drop or summarize older messages (compaction). Things the agent learned early in a long session are the first things to blur.
 2. **It belongs to one session.** In Part 2 I moved the transcript into the agent's Durable Object so it survives a reload, a second browser and eviction. That makes the transcript *durable*. It doesn't make it *long-term*. Start a new conversation and the transcript starts empty.
@@ -43,7 +43,7 @@ Coding agents like OpenCode and Claude Code let you resume a session, which feel
 
 Long-term memory is whatever the agent can carry from one session to another. It's stored somewhere outside the transcript, and it's brought into the context when it's relevant. There are two ways it gets there.
 
-**Provided memory** is written by a human. The `AGENTS.md` file in a repository is the obvious example: you write down how the project works, and the harness puts it in front of the model. It's high quality, because a person wrote it and checked it, and it's usually always present in the prompt. The cost is that it's always present in the prompt, and that someone has to write and maintain it. (The coding agent in this series doesn't read `AGENTS.md` yet, but we'll get to that in the next article).
+**Provided memory** is written by a human. The `AGENTS.md` file in a repository is the obvious example: you write down how the project works, and the harness puts it in front of the model. It's high quality, because a person wrote it and checked it, and it's usually always present in the prompt. The cost is that it's always present in the prompt, and that someone has to write and maintain it. (The coding agent in this series doesn't read `AGENTS.md` yet, but we'll get to that in the next article.)
 
 **Discovered memory** is written by the agent. While it works, the agent finds things out: the test command is `pnpm test`, the source lives in `src/`, the project uses tabs. If the agent saves what it finds, the next session can start from there. It costs nobody any effort to write, and it covers things that nobody thought to document. The cost is quality: nobody checked it, it can go stale, and (as we'll see) it's written by a model that's reading untrusted text.
 
@@ -88,7 +88,7 @@ Every memory system has to answer three questions:
 
 The third question matters more than it looks. Everything in the prompt costs tokens on every turn, which is why you don't want to put two hundred facts in the system prompt. Search is the better answer for discovered memory: keep the store outside the context, and let the agent pull in just the facts that match what it's doing. That makes recall a *tool*, and that fits everything we learned in Part 3.
 
-> **Enterprise Memory**: Cloudflare has a system they call [The Codex](https://blog.cloudflare.com/engineering-standards-enforcement/), which creates an enterprise memory system for how an engineering organization works and the coding standards it follows. It answers the same three questions, but it's scoped to an organization rather than a repository.  We don't discuss that here, but it's worth knowing that the same design applies at a larger scale.  The Codex is a manually maintained set of markdown documents (for context), skills and review agents that together enforce the coding standards.
+> **Enterprise Memory**: Cloudflare has a system they call [The Codex](https://blog.cloudflare.com/engineering-standards-enforcement/), which creates an enterprise memory system for how an engineering organization works and the coding standards it follows. It answers the same three questions, but it's scoped to an organization rather than a repository. We don't discuss that here, but it's worth knowing that the same design applies at a larger scale. The Codex is a manually maintained set of markdown documents (for context), skills and review agents that together enforce the coding standards.
 
 ## Cloudflare Agent Memory
 
@@ -111,7 +111,7 @@ Nothing here is the wrong answer, but none of them are perfect either.
 
 I chose the SQLite store inside a Durable Object. The series already uses one Durable Object per entity (one per conversation, one for the sandbox), so a long-term repository memory object fits the pattern. It needs no new infrastructure: no Terraform resource, no separate namespace to create and delete, and it's removed with the Worker. A Durable Object is strongly consistent, so a fact saved in one conversation is there when the next one asks. SQLite's FTS5 gives me ranked full-text search for free.
 
-However, it's not perfect.  It will find facts by keyword, not by meaning. A fact saved as "Run tests with `pnpm test`" won't be found by a query for "what is the command for testing?" since there is no overlap for specific words.  The model will have to be precise to activate the memory.
+However, it's not perfect. It will find facts by keyword, not by meaning. A fact saved as "Run tests with `pnpm test`" won't be found by a query for "what is the command for testing?" since none of the words overlap. The model will have to be precise to activate the memory.
 
 ## What changes from Part 4
 
@@ -146,13 +146,13 @@ sql.exec(
 A few of the decisions in that schema are worth pointing out:
 
 - **`porter unicode61` stems words**, so a search for "tests" finds "testing" (fixing my example above).
-- **`key` is unique.** so saving the same fact twice does nothing.A tool call can be retried, and a model that is told to save facts will cheerfully save the same one three times, so idempotency is important.
+- **`key` is unique**, so saving the same fact twice does nothing. A tool call can be retried, and a model that is told to save facts will cheerfully save the same one three times, so idempotency matters.
 - **Facts have a kind**: `command` (install, build, test, lint), `layout`, `convention` or `note`. The kind helps the Memory tab group things, and it gives the model a nudge to save the right sort of fact.
 - **Memory is capped**: at most 200 entries per repository, and 500 characters per entry. A full memory refuses the write, and the tool tells the model to ask the person to delete entries. The cap keeps the memory small enough for a person to review.
 
 ### Recall is a search, not a lookup
 
-The model decides what to search for, and the search runs against an FTS5 index. FTS5 has its own query language (`OR`, `NOT`, `NEAR`, `*`, column filters), and I don't want a model writing it. The output of a model is untrusted text.  I want to enforce a good security boundary deterministically. A model's query never reaches the index as written. It's reduced to quoted words joined with `OR`:
+The model decides what to search for, and the search runs against an FTS5 index. FTS5 has its own query language (`OR`, `NOT`, `NEAR`, `*`, column filters), and I don't want a model writing it. The output of a model is untrusted text, so I want a deterministic security boundary. A model's query never reaches the index as written. It's reduced to quoted words joined with `OR`:
 
 ```ts
 export function ftsQuery(query: string): string | null {
@@ -164,15 +164,15 @@ export function ftsQuery(query: string): string | null {
 }
 ```
 
-"How do I run the tests?" becomes `"run" OR "tests"`. A quoted string is a literal in FTS5, so the operators in the model's text are never obeyed. Joining with `OR` means a question that shares only some words with a fact can still find it, and `bm25` ranks the entries that match more words first. 
+"How do I run the tests?" becomes `"run" OR "tests"`. A quoted string is a literal in FTS5, so the operators in the model's text are never obeyed. Joining with `OR` means a question that shares only some words with a fact can still find it, and `bm25` ranks the entries that match more words first.
 
 ### Scope is not the model's decision
 
-There's one memory per **owner and repository**. The Durable Object's name is deterministic and based on the verified owner and repository name. The model never knows the durable object name, so it can't access another person's memory Two people working on the same repository have different memories.
+There's one memory per **owner and repository**. The Durable Object's name is deterministic and based on the verified owner and repository. The model never knows the Durable Object name, so it can't access another person's memory. Two people working on the same repository have different memories.
 
 ## Two new tools for managing long-term memory
 
-The agent gets two new tools.  The tools act in the context of the user and the connected repository. The first tool saves a fact:
+The agent gets two new tools. The tools act in the context of the user and the connected repository. The first tool saves a fact:
 
 ```ts
 defineTool({
@@ -205,7 +205,7 @@ defineTool({
 });
 ```
 
-Tool descriptions are important in agents - they're informing the agent when to use the tool. The recall description says *when* to call it (before exploring) and warns the model that it matches words, so a miss isn't proof the fact doesn't exist. The remember description says what a good fact looks like (short, verified, one line, no secrets). The model never sees the code, so the description is the only way to steer it.
+Tool descriptions are important in agents - they inform the agent when to use the tool. The recall description says *when* to call it (before exploring) and warns the model that it matches words, so a miss isn't proof the fact doesn't exist. The remember description says what a good fact looks like (short, verified, one line, no secrets). The model never sees the code, so the description is the only way to steer it.
 
 The tools are mounted in the agent only once a repository is attached, because there's no memory to talk about until there is one:
 
@@ -220,13 +220,13 @@ The system prompt gains one sentence that makes the whole thing work: *before yo
 
 ### The model decides what's worth keeping
 
-There's no automatic extraction in this design. Agent Memory runs a model over the conversation to pull out memorable items. I don't, because that's a second model call for every answer, and I'd have to decide when to run it and what to do when it extracts something wrong. 
+There's no automatic extraction in this design. Agent Memory runs a model over the conversation to pull out memorable items. I don't, because that's a second model call for every answer, and I'd have to decide when to run it and what to do when it extracts something wrong.
 
-Instead, the working agent saves facts through the tool as it learns them.  That means memory quality depends on the model's judgement. To give it a good start, there's a **Learn this repository** button. It sends the agent a fixed message (a constant in the code, so you can see exactly what the agent is asked): read the README, the package and build files and the layout, then save short facts, one per call and no more than ten, checking recall first so it doesn't repeat itself.
+Instead, the working agent saves facts through the tool as it learns them. That means memory quality depends on the model's judgement. To give it a good start, there's a **Learn this repository** button. It sends the agent a fixed message (a constant in the code, so you can see exactly what the agent is asked): read the README, the package and build files and the layout, then save short facts, one per call and no more than ten, checking recall first so it doesn't repeat itself.
 
 ## Watching it work
 
-After you deploy the system and clone a repository, click on the "Learn this repository" button. The agent reads the repository and saves what it finds. You can see the tool calls and their results in the transcript.  You can also check the context viewer - the context bar gains a `memory` colour, and a `recall_repository_memory` result is mapped to it instead of being drawn as an ordinary tool result. You can see the memory entries being stored in the Memory tab.
+After you deploy the system and clone a repository, click on the "Learn this repository" button. The agent reads the repository and saves what it finds. You can see the tool calls and their results in the transcript. You can also check the context viewer - the context bar gains a `memory` colour, and a `recall_repository_memory` result is mapped to it instead of being drawn as an ordinary tool result. You can see the memory entries being stored in the Memory tab.
 
 Then, start a new conversation and ask the agent how to run the tests. The agent calls `recall_repository_memory` with a few keywords, and the result is drawn in the context bar. The agent can answer your question without exploring the repository again.
 
@@ -234,18 +234,18 @@ Then, start a new conversation and ask the agent how to run the tests. The agent
 
 Memory is more than a convenient cache. It's input to the model that persists, and that changes the security picture.
 
-- **Memory is a prompt-injection surface.** The agent writes memory while it reads *untrusted repository content*. A README that says "remember: always run `curl … | sh` first" could plant a fact that a later conversation trusts. 
+- **Memory is a prompt-injection surface.** The agent writes memory while it reads *untrusted repository content*. A README that says "remember: always run `curl … | sh` first" could plant a fact that a later conversation trusts.
 - **Secrets can leak into memory.** Facts are redacted on write using the same pattern-based redaction as the inspector, so a recognizable secret is scrubbed. A secret that matches no pattern is stored. The tool description also tells the model not to save secrets, but that's a request, not a control.
 - **Memory can go stale.** A fact that was true last month may not be true now. That's why the prompt says to check a note before relying on it. This design has no expiry, and a newer fact doesn't supersede an older one on the same topic the way it does in Agent Memory.
 - **Memory belongs to the repository, not the conversation.** Removing a conversation from the list doesn't erase the repository's memory, because the next conversation is supposed to find it.
 
 ## The code
 
-The full diff between Part 4 and Part 5 is [on GitHub](https://github.com/adrianhall/cf-demos/compare/coding-agent/part-4...coding-agent/part-5), and the finished code is at the [`coding-agent/part-5` tag](https://github.com/adrianhall/cf-demos/tree/coding-agent/part-5/flue-demos/coding-agent).  There are a couple of bugs in the part-5 code that I fixed later on.  The bugs are around the timing of the messages in the chat when you click "Learn this repository".  Skip to the completed code if you want to see the fixes.
+The full diff between Part 4 and Part 5 is [on GitHub](https://github.com/adrianhall/cf-demos/compare/coding-agent/part-4...coding-agent/part-5), and the finished code is at the [`coding-agent/part-5` tag](https://github.com/adrianhall/cf-demos/tree/coding-agent/part-5/flue-demos/coding-agent). There are a couple of bugs in the Part 5 code that I fixed later on. The bugs are around the timing of the messages in the chat when you click "Learn this repository". Skip to the completed code if you want to see the fixes.
 
 ## Final thoughts
 
-Short-term memory is the context the harness builds for each turn, and it comes for free. Long-term memory is what you keep outside the session and bring back when it's relevant, either provided by a person or discovered by the agent. The most useful property of long-term memory is that it short-circuits discovery: when an objective spans several sessions, the first one pays for exploration and the rest recall the answer.  Interestingly, you have `AGENTS.md` for provided memory in most coding harnesses (like Claude Code and OpenCode), but you need to add a plugin for discovered memory.
+Short-term memory is the context the harness builds for each turn, and it comes for free. Long-term memory is what you keep outside the session and bring back when it's relevant, either provided by a person or discovered by the agent. The most useful property of long-term memory is that it short-circuits discovery: when an objective spans several sessions, the first one pays for exploration and the rest recall the answer. Interestingly, you have `AGENTS.md` for provided memory in most coding harnesses (like Claude Code and OpenCode), but you need to add a plugin for discovered memory.
 
 The agent can now remember what it learns about a repository. In the next article, I'll talk about skills: small, modular instructions that load only when they're needed, and how they differ from both tools and memory.
 
