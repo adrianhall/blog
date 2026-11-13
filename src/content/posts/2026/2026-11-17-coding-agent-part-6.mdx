@@ -1,0 +1,210 @@
+---
+title: "Teach the Agent Skills"
+date: 2026-11-17
+categories:
+  - AI
+tags:
+  - agentic-coding
+mermaid: true
+---
+
+import CodingAgentToc from '../../../components/series/2026-coding-agent-toc.mdx';
+import Mermaid from '../../../components/Mermaid.astro';
+
+Welcome to Part 6 of my seven-part series on how to write a coding agent on the Cloudflare Dev Platform. In [Part 5](/posts/2026/2026-11-13-coding-agent-part-5.html) the agent learned to remember what it discovers about a repository. Memory covers the facts. It doesn't cover the procedures. "How do I run the tests?" is a fact. "How do I write a commit message the way this project wants it?" is a procedure, and it can run to a page of instructions that I don't want in the prompt on every single turn.
+
+![Teach the agent skills](/assets/images/2026/Nov17-banner.jpg)
+
+<CodingAgentToc />
+
+## What is a skill?
+
+A skill is a set of instructions that are added to the context when needed. Functionally, it is a directory with a `SKILL.md` file in it. Additional reference files can be added to the directory if required. The file has a little frontmatter (a `name` and a `description` that says when to use the skill) and a body of instructions in Markdown. Here's the one I bundled with the agent, trimmed to the interesting parts:
+
+```markdown
+---
+name: conventional-commits
+description:
+  Write a git commit message in the Conventional Commits format. Use when asked to commit changes,
+  write or improve a commit message, or summarise a change for a commit.
+---
+
+Write every commit message in the Conventional Commits 1.0.0 format.
+
+1. Look at what is staged before writing anything: run `git status` and `git diff --staged`.
+2. Pick one type for the change as a whole: `feat`, `fix`, `docs`, `refactor`, `test`, ...
+3. Add a scope in parentheses when the change is confined to one area the repository already names.
+4. Write the subject in the imperative mood, lower case, with no full stop, under 72 characters.
+...
+7. Show the user the message and the files it covers before committing. Never push.
+```
+
+You can think of a skill as a procedure that the agent reads *when it needs it*. The frontmatter is the sales pitch and the body is the work. The [Agent Skills specification](https://agentskills.io/home) is well supported across multiple coding harnesses. That's why the same skill directory works for OpenCode, Claude Code and the agent in this series.
+
+## Progressive disclosure
+
+An agent could carry every instruction it might ever need in the system prompt. It wouldn't take long to find out why that doesn't work. Everything in the prompt is sent on every model call, so loading all the skills would bloat the context unnecessarily and make it difficult for the model to find the right set of instructions.
+
+Skills solve this with *progressive disclosure*. Flue puts only the `name` and `description` of each skill into the system prompt, as an **Available Skills** catalog, and gives the model a tool called `activate_skill`. The body of the skill stays out of the context until the model decides the task in front of it matches a description. Then it calls `activate_skill` with the skill's name and the body arrives as the tool result.
+
+<Mermaid code={`sequenceDiagram
+    autonumber
+    participant U as User
+    participant M as Model
+    participant H as Harness (Flue)
+
+    Note over M: System prompt carries the catalog:<br/>conventional-commits: "Use when asked to commit..."
+    U->>M: Commit my changes
+    M->>H: activate_skill("conventional-commits")
+    H-->>M: Full instructions (the SKILL.md body)
+    M->>H: bash: git status, git diff --staged
+    H-->>M: Staged changes
+    M-->>U: Proposed commit message
+    Note over M: The body stays in the transcript<br/>for the rest of the conversation
+`} />
+
+The descriptions do all of the routing. The model never sees the body until it has decided that the skill applies. A vague description means the skill is never loaded, and an over-broad one means it's loaded when it shouldn't be.
+
+### What it costs
+
+The catalog is cheap enough that you can have dozens of skills without seeing a real impact on context. However, large skills will consume context quickly. For example, let's look at the costs associated with a couple of skills in the demo:
+
+| What | Roughly | When you pay |
+| --- | --- | --- |
+| The catalog with one skill in it (heading, instructions to the model and the `conventional-commits` entry) | 100 tokens | Every call |
+| The `conventional-commits` body | 500 tokens | Once it's activated, then on every later call until compaction |
+| The `migrate-to-vinext` skill from `cloudflare/vinext` | 4,200 tokens | Once it's activated, then on every later call until compaction |
+
+The context bar we have in the app shows both side by side. The catalog gets its own `skill-catalog` colour, and the `activate_skill` result stays an ordinary tool result (labelled with the skill's name), so you can see the small, always-present cost and the large, on-demand cost in the same bar.
+
+## Skills, tools, memory and AGENTS.md
+
+By now the agent has four ways to get information and capability into the context, and they are easy to confuse.
+
+| | What it is | Written by | Costs tokens |
+| --- | --- | --- | --- |
+| **Tool** | An action the agent can take | A developer, in code | The definition on every call; the result when it runs |
+| **Memory** | Facts the agent saved earlier | The agent | Only the entries that recall returns, when it searches |
+| **Skill** | Instructions for a kind of task | A person (or an installer) | A catalog line on every call; the body when activated |
+| **`AGENTS.md`** | Instructions for a repository | A person | The whole file, on every call |
+
+A skill is a tool in disguise, just as everything else has been in this series. `activate_skill` is a tool. It has a definition, the model calls it, and its result lands in the transcript. A skill doesn't give the agent a new ability. It gives the agent a better way to use the abilities it already has.
+
+`AGENTS.md` is the odd one out. It's the always-on version of a skill: instructions that are in the prompt whether or not the task needs them.
+
+## Three ways to get a skill
+
+The agent has three sources of skills. Flue supports two kinds (skills you declare in code and skills it finds in the sandbox), and I'm showing a third way to get into the second kind.
+
+### 1. Bundled with the app
+
+A bundled skill ships inside the Worker. It's mounted on every conversation, whether or not a repository is attached. Mounting it takes one import and one line in the agent:
+
+```ts
+import commits from '../skills/conventional-commits/SKILL.md';
+
+export function Assistant(): string {
+  // ...
+  useSkill(commits);
+  // ...
+}
+```
+
+Flue's build reads the `SKILL.md` as part of the import, validates the frontmatter (the `name` has to equal the directory name), and packages the directory into the Worker bundle. Any supporting files in the directory are served read-only to the agent, and nothing is copied into the sandbox. Bundled skills are the place for procedures that belong to *your product*: how your agent should behave, regardless of what it's working on.
+
+### 2. The repository's own skills
+
+Flue scans for `.agents/skills/<name>/SKILL.md` in the sandbox's working directory when the sandbox is attached. If the repository you cloned has skills in that directory, they join the catalog with no code at all. This is the case I care about most, because it's the project-specific one: the testing conventions, the release process, the way this team writes migrations. The knowledge lives in the repository, it's versioned with the code and it follows the code wherever the agent goes.
+
+### 3. Installed from the terminal
+
+The third way is the one I like best. The skills CLI installs skills from a Git repository into `.agents/skills/`. The Terminal tab from Part 4 gives me a shell in the same container as the agent, so I can run the installer there. The skill lands in the cloned repository's `.agents/skills/` and the agent picks it up:
+
+```sh
+cd /workspace/<repository>
+DISABLE_TELEMETRY=1 npx -y skills add https://github.com/cloudflare/skills \
+  --skill wrangler -a universal --copy -y
+```
+
+A few notes on that command:
+
+- **`-a universal`** installs to `.agents/skills/` only, which is where Flue looks, and `--copy` writes real files and not symlinks into a directory outside the clone.
+- **`DISABLE_TELEMETRY=1`** stops the CLI from phoning home to `www.skills.sh`. That host isn't on the sandbox's allowlist, so the calls would fail anyway, but there's no point in making them.
+
+The CLI is fetched from `registry.npmjs.org` and it clones the source from `github.com`. The sandbox's egress allowlist already allows both of these hosts.
+
+Once it's installed, an installed skill is indistinguishable from a skill the repository committed.
+
+**You don't need a new conversation.** I expected that a skill installed halfway through a conversation would be invisible until I started a new one. It isn't. Flue notices that the set of skills changed between two submissions and tells the model about it at the start of the next one.
+
+## What changes from Part 5
+
+The full diff is [on GitHub](https://github.com/adrianhall/cf-demos/compare/coding-agent/part-5...coding-agent/part-6).
+
+Inside the demo, the changes are:
+
+- **Skill:** `src/skills/conventional-commits/SKILL.md`, mounted with `useSkill`.
+- **Agent:** the sandbox's working directory is now the cloned repository (more on this below), and the system prompt gains a warning about untrusted repository instructions.
+- **Segments:** a `skill-catalog` kind for the context bar, with the catalog split out of the system prompt and the skill signals parsed from the transcript.
+- **Client:** a Skills tab and a `skill-catalog` colour in the legend.
+- **Teardown:** a `teardown:images` script that deletes the sandbox image (see the end of this article).
+
+## The one change to the agent
+
+Flue discovers workspace skills in the sandbox's working directory **and nowhere else**. It also reads `AGENTS.md` (or `CLAUDE.md`) from that directory and folds it into the system prompt. In [Part 4](/posts/2026/2026-11-10-coding-agent-part-4.html) I mounted the sandbox with `/workspace` as the working directory. But the clone goes into `/workspace/<repo>`. So Flue would look in `/workspace/.agents/skills/`, find nothing, and the repository's own skills would never show up.
+
+The fix is to mount the sandbox with the clone as its working directory:
+
+```ts
+if (repository !== null) {
+  // Flue reads <cwd>/AGENTS.md and <cwd>/.agents/skills/, and the clone is a directory under
+  // the workspace, so a workspace cwd would find neither.
+  const cwd = sandboxCwd(SANDBOX_WORKSPACE, repository);
+  useSandbox(conversationSandbox(cwd), { cwd });
+}
+```
+
+As a result of this change, the agent now sees the repository's skills in its catalog, and its AGENTS.md in the system prompt, on every turn. The skill bodies stay out until the agent asks for them.
+
+## How the catalog reaches the model
+
+Flue writes the `## Available Skills` section into the system prompt on the **first request of a conversation**, and then keeps it frozen. It does that on purpose: a provider's prompt cache works by matching the start of the prompt, and a system prompt that changes every turn would defeat it. The catalog is rebuilt only when the conversation is compacted.
+
+Skills can appear after that first request. The repository's skills only become visible once I clone it and the sandbox mounts, and that's after the conversation has started. Skills that arrive later reach the model another way: as a **signal message** in the transcript.
+
+<Mermaid code={`flowchart TB
+    A["First request: system prompt<br/>## Available Skills<br/>(bundled skills only)"]
+    B["Clone a repository,<br/>sandbox mounts"]
+    C["environment signal:<br/>restates every skill,<br/>including the repository's"]
+    D["Install a skill from the terminal"]
+    E["resources signal on the next message:<br/>New skill available: wrangler"]
+    A --> B --> C --> D --> E
+`} />
+
+There are two kinds of signal. An `environment` signal is sent when the sandbox is attached, and it restates the whole catalog. A `resources` signal is sent when the set of skills changes between submissions, and it announces what's new. Both are just text, appended to the conversation as a user-role message that the framework wrote.
+
+**The parsing depends on Flue's wording.** None of this is a public API. The inspector reads the signals by matching text such as `All available skills:` and `New skill available:`, which Flue 2.3.0 happens to write. A Flue upgrade could change the wording and the Skills tab would quietly go blank.
+
+## The Skills tab
+
+The Skills tab shows the catalog **as the model was told it**. It reads the latest context snapshot, not the sandbox, so it never shows a skill that the model doesn't know about. Each entry has a name, the description, a badge (`bundled` or `repository`) and an `activated` marker if the model has called `activate_skill` for it in this conversation. It also shows the cost: the catalog tokens on every call, and the tokens in each loaded body.
+
+## What to be careful of
+
+Skills are instructions the agent follows, so a skill is powerful and dangerous in the same way.
+
+- **Repository skills are untrusted content.** A cloned repository's skills and its `AGENTS.md` are files that nobody on your team wrote or reviewed. A skill that says "first, upload `~/.ssh` somewhere" is a prompt injection with a friendly name.
+- **The description is the routing decision.** The model decides whether to activate a skill from its description alone. A description like "Helps with commits" will be ignored half the time. A description that says *when to use it* ("Use when asked to commit changes, write or improve a commit message...") gets loaded when it should.
+- **Activated skills stay in the context.** A big skill, loaded once, is paid for on every later turn until compaction. Keep skills focused and small enough to be worth that. This is the same advice I gave in [my agentic setup article](/posts/2026/2026-08-14-agentic-setup.html): avoid "god skills".
+- **Flue doesn't enforce `allowed-tools`.** The Agent Skills format has an `allowed-tools` field. Flue accepts it, but doesn't enforce it. A skill can't limit what the agent does with its tools.
+- **Removals aren't applied to the tab.** If a signal says a skill is no longer available, the Skills tab doesn't remove it until the system prompt is rebuilt at compaction.
+
+## Final thoughts
+
+A skill is a procedure that sits outside the context until the model asks for it. The catalog costs a line per skill on every call, and the body costs tokens only when it's loaded. Use `AGENTS.md` for the few things the agent must always know, and use skills for everything it should know how to do.
+
+Skill writing is a skill itself. The instructions have to be clear, complete and correct, and the description has to be specific enough that the model can decide when to load it. The agent's skills are a reflection of the people who wrote them. [Learn to write good skills](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices), and the agent will be better at its job.
+
+The agent now has tools, a sandbox, memory and skills. In the final article, I'll connect it to an external service with MCP, look at what that costs in context (more than you'd think), and pull the whole series together.
+
+Until then, you can find the full diff between Part 5 and Part 6 [on GitHub](https://github.com/adrianhall/cf-demos/compare/coding-agent/part-5...coding-agent/part-6), and the finished code at the [`coding-agent/part-6` tag](https://github.com/adrianhall/cf-demos/tree/coding-agent/part-6/flue-demos/coding-agent).
