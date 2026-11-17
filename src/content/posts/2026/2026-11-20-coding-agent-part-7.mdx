@@ -1,0 +1,173 @@
+---
+title: "Connect the Agent to External MCP Services"
+date: 2026-11-20
+categories:
+ - AI
+tags:
+ - agentic-coding
+mermaid: true
+---
+
+import CodingAgentToc from '../../../components/series/2026-coding-agent-toc.mdx';
+import Mermaid from '../../../components/Mermaid.astro';
+
+Welcome to the final article in my series on how to write a coding agent on the Cloudflare Dev Platform. In [Part 6](/posts/2026/2026-11-17-coding-agent-part-6.html) I taught the agent skills: procedures that stay out of the context until the model asks for them. The agent can now run commands in a sandbox, remember what it learns about a repository and follow instructions. Everything it can do so far, though, is something I wrote or installed myself. In this article I'm going to connect it to a capability that someone else wrote and runs.
+
+![Connect the agent to external MCP services](/assets/images/2026/Nov20-banner.jpg)
+
+<CodingAgentToc />
+
+[Part 7](https://github.com/adrianhall/cf-demos/tree/coding-agent/part-7/flue-demos/coding-agent) connects the agent to a remote MCP server. In the demo, that's the public Cloudflare documentation MCP server. Connecting your agent to a server you don't control changes your security picture in ways that might not become evident until later on. It also changes how the context is constructed, so it affects your token spend as well.
+
+## What is MCP?
+
+The [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) is an open protocol that lets an agent use tools that are defined and run somewhere else. There are two sides to it:
+
+- An **MCP server** exposes capabilities. The most common ones are *tools* (actions the model can ask for), but servers can also offer *resources* (data to read) and *prompts* (reusable templates).
+- An **MCP client** lives inside the agent's harness. It connects to the server, asks what's on offer and calls things on the model's behalf.
+
+The protocol is very compact. The client sends `tools/list` and gets back the tool definitions (a name, a description and a JSON Schema for its input). When the model asks for one of those tools, the client sends `tools/call` with the arguments and gets the result back. This is the same pattern as any other tool call, so MCP fits rather nicely into the agent loop. The only difference is who wrote the function and where it runs.
+
+### Local and remote servers
+
+A **local** server runs as a process on your machine and talks to the client over standard input and output. It is normally distributed as an npm package for you to install, and the process runs with *your* permissions and full access to your computer.
+
+A **remote** server runs somewhere else on the Internet and talks over HTTP. The client POSTs JSON-RPC messages to a single URL, and the server answers with either a plain JSON response or a stream of events. The server can require authentication, and it runs with its *own* permissions, not yours.
+
+Remote coding agents (such as the one we are developing) can't launch an untrusted process automatically, so this agent can only use remote MCP servers.
+
+## Why use MCP at all?
+
+Developers use a lot of standardised tools - issue trackers, documentation, deployment platforms, logging infrastructure, wikis, and more. Each of these tools has its own way of looking at data and exposing its actions. MCP allows the developer of those tools to provide a set of capabilities to all agentic AI harnesses – not just yours. The effort taken to tune the MCP server to do the job right is worth it to the tool developer and less so to you. It's the same reason you might reach for the GitHub CLI instead of going to the GitHub website to do work. It's just easier.
+
+## How an MCP tool gets into the loop
+
+From the model's side, nothing changes. The harness connects to the server, lists its tools and adds their definitions to the context, next to all the other tools from the sandbox and skills. When the model asks for one of these tools, the harness forwards the call and puts the result into the transcript - just like any other tool.
+
+<Mermaid code={`sequenceDiagram
+    autonumber
+    participant U as User
+    participant M as Model
+    participant H as Harness (Flue)
+    participant S as MCP server
+
+    H->>S: initialize, then tools/list
+    S-->>H: Tool names, descriptions, input schemas
+    Note over M: Context now includes the MCP tool definition
+    U->>M: How do I bind a KV namespace?
+    M->>H: Tool call: search_cloudflare_documentation
+    H->>S: tools/call
+    S-->>H: Search result chunks
+    H->>M: Same context + the tool call + the result
+    M-->>U: Answer
+`} />
+
+There are two new places where things can go wrong. The server's *description* goes into the prompt on every call, and the server's *results* go into the transcript on every later call. You control neither one, which leads to a question of trust and security.
+
+## What an MCP tool costs
+
+Tools introduce context in two places. First, the tool definition is added to the context to allow the model to request the tool. The definition is cheap. The documentation search tool's description and input schema come to roughly 180 tokens. For a tool with one `query` parameter, that's nothing.
+
+Second, the result from calling the tool is added to the existing context on the next cycle through the model. The result is not cheap. One search can return multiple chunks of documentation and this result is added to the context. As an example, I ran several different searches against the Cloudflare documentation MCP server and counted the tokens in what the model would receive. A typical result consumes about 70 KB and 18,000 tokens for one search. Obviously, other tools will have different characteristics. The MCP server is in control of how much data it sends you. You can't ask for less.
+
+Like all tool results, the effect compounds. That result is added to the short-term transcript that forms the context for the next call **and all subsequent calls**. This can lead to increased context spend and context exhaustion, which can ultimately increase hallucinations.
+
+An MCP tool's cost is set by its results, not its definition. When you're deciding whether to connect a server, don't look at the tool list. Look at what a typical call returns. You can see this in the demo by looking at the context bar. An `mcp__` result shows up as a very large `tool-result` segment, and you can watch it dwarf the system prompt and everything else in the bar.
+
+## Which servers should you trust?
+
+Connecting to an MCP server is adding a third-party dependency to your agent, and it's a more dangerous kind of dependency than most, since an MCP server writes text that goes directly into your model's prompt.
+
+There are two places that text can come from:
+
+1. **The tool definitions.** The name, description and schema the server returns from `tools/list` are inserted into the prompt on every call. A malicious or compromised server can put instructions in a description, and the model reads them with the same weight as the rest of the system prompt. The server can also change the description later, after you decided to trust it.
+2. **The tool results.** Whatever the tool returns goes into the transcript. If the server proxies content that anyone can write (a ticket, a web page, a chat message), then anyone can plant instructions in your agent's context.
+
+This is the same prompt-injection surface that the earlier parts describe. Tool output should be considered untrusted. When you have an MCP server, **the server's tool descriptions should also be considered untrusted**.
+
+Simon Willison describes the combination that makes this dangerous as the [lethal trifecta](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/): access to private data, exposure to untrusted content, and a way to communicate externally. An agent with all three can be steered into leaking the data. This agent has a root shell in a container and reads untrusted repositories, so I'm careful about what else I add. A documentation search server is about as low-risk as an MCP server gets: it's read-only and it holds nobody's private data.
+
+I apply three mitigations within the agent in the demo – none of which is a complete answer to this problem:
+
+- **An allowlist of tools.** The server offers two tools: `search_cloudflare_documentation` and `migrate_pages_to_workers_guide`. The agent mounts only the first. Every mounted tool adds its description to every prompt, and the allowlist limits both the context cost and what a server can put in front of the model. Flue also checks the allowlist: if you name a tool the server doesn't expose, the connection fails with a message that lists the tools it does. The [MCP Server Portal](https://developers.cloudflare.com/cloudflare-one/access-controls/ai-controls/mcp-portals/) available from Cloudflare would be a great addition here as it provides this filtering for you.
+- **A pinned hash of the definition.** I recorded a hash of the mounted tool's description and schema, and the Worker compares the definition the model is actually sent against it. If the server changes what it tells the model, the hash changes. This is a signal to go and read the new text, not a reason to refuse to answer, so the agent logs a warning and the MCP tab shows an alert, but it carries on working.
+- **A prompt that says what the results are.** The system prompt tells the model that the documentation search comes from a third-party server, and that it's reference material and never instructions. It helps, but a determined injection might not respect it.
+
+I also provide a context inspector. A context inspector isn't something most people look at, but it's useful here: it shows the exact definition the model was sent and the exact result, so you can read what the server is telling your model.
+
+## What about authentication?
+
+The documentation server needs no authentication, so the demo implements none. Most useful servers sit in front of your data, and they need to know who's asking.
+
+I wrote about this at length in [the agent authentication article](/posts/2026/2026-08-25-agent-authentication.html), and the short version is that MCP's authorisation only covers the hop from the client to the server. It doesn't tell you whose authority the agent is using, and it doesn't carry an agent's identity to whatever the server calls next. For an agent running as a Worker, the credential would be the "agent acts as itself" case: a service identity with narrow permissions, not a delegation of whoever happens to be typing. Per-user delegation through token exchange is the next step, and it's a whole article of its own. Flue doesn't store tokens for you. It has a place where you supply the credential, and the rest is up to you.
+
+## What changes from Part 6
+
+The full diff is [on GitHub](https://github.com/adrianhall/cf-demos/compare/coding-agent/part-6...coding-agent/part-7).
+
+Inside the demo, the changes are:
+
+- **Agent:** one `useMcpConnection`, and two sentences in the system prompt.
+- **Config:** the server's URL, as one constant in `src/config.ts`.
+- **Segments:** an `mcp-definition` kind for the context bar. The `mcp__` tool's definition maps to it, and so does the "server unavailable" signal.
+- **Client:** an MCP tab and a colour for the new segment.
+
+## The connection
+
+The whole integration is this:
+
+```ts
+useMcpConnection({
+  name: 'cfdocs',
+  url: DOCS_MCP_URL, // https://docs.mcp.cloudflare.com/mcp
+  tools: ['search_cloudflare_documentation'], // allowlist: exactly one tool
+  optional: true, // run without it if the server is unreachable
+  // fetch: myFetchReplacement // optional, to route through the egress worker
+});
+```
+
+The `name` becomes part of the tool's name. Flue mounts the tool as `mcp__cfdocs__search_cloudflare_documentation`, so tools from different servers can never collide. The `tools` list is the allowlist I described above. The `optional` flag decides what happens when the server is down.
+
+Note that the connection for an MCP service comes from the agent's Durable Object, not from the container. The egress worker only controls connections from the sandbox container. If you want to force the HTTP request to go through the egress worker, you can add a `fetch` replacement to the `useMcpConnection()` call when you define the agent.
+
+### When the server is unreachable
+
+With `optional: true`, an unreachable server doesn't stop the agent. Flue runs the submission without the tool and adds a signal message to the transcript that tells the model the server is unavailable and its tools aren't mounted. It does this once per session and tries again on the next message. The agent still answers, just without the search.
+
+### Two ways to read the documentation
+
+The agent now has two tools for the same job. Part 3's `fetch_doc` reads one whole page by path. The MCP tool searches and returns the closest chunks. The system prompt tells the model to search first, and to read a whole page with `fetch_doc` only when a search result isn't enough.
+
+## The MCP tab
+
+I've added a new tab to the inspector. The MCP tab shows the connection, its status, the tools (including whether they are allowed or hidden), what the definition costs on every call, and whether the definition still matches the pinned hash. I've also added an `mcp-definition` segment to the context bar, so you can see how little the MCP tool definitions cost. An MCP tool's result is shown as a `tool-result` segment, so you will see how much bigger results are than definitions.
+
+### Watching it work
+
+Clone a repository and ask a question that needs the documentation, such as how to bind a KV namespace in a Worker's configuration. The model calls `mcp__cfdocs__search_cloudflare_documentation` with a few keywords. The tool card appears in the message list, the context bar jumps by the size of a search result, and the model answers from what came back. Then open the Context tab and watch how the context changes.
+
+## The finished agent
+
+This is the last piece of the demo agent. It is driven by the chat app and has tools, a sandbox, multi-session persistent memory, skills, and now MCP servers. Aside from the initial setup, every single addition was just a few lines of code. Flue made adding each capability a declaration and hid the hard work from me. The agent is a loop, and the loop is the same shape as the harnesses most of us use day to day. The difference is that I can see what each part does, and I can reason about how it changes the context.
+
+This is not a finished vibe-coding environment, and I wouldn't use it as the base for your own harness. There are advantages to building a remote coding harness, but I would likely start from [an existing harness](https://developers.cloudflare.com/agents/harnesses/#compare-harnesses) like [Pi Durable](https://github.com/cloudflare/agents/tree/main/examples/next/harnesses/pi). I'd also add some other capabilities that are only possible when running in the cloud; for example, using [Browser Run](https://developers.cloudflare.com/browser-run/) so I could use Stagehand or Kitesurf to automate a browser in the cloud and capture screenshots.
+
+The point of this series was to show how to build an agent from scratch, and I hope it has done that.
+
+### Things the series taught me
+
+A few things I'd carry into the next agent I build.
+
+- **An agent is a loop, and everything is a tool in disguise.** A sandbox, a memory, a skill and an MCP server are all ways of changing what's in the context, or of letting the model act. Once you see the loop, you can reason about each one.
+- **Context is the budget, and everything spends it.** Definitions cost on every call. Results cost on every later call. The tools I measured as cheap (a skill catalogue, a tool definition) were cheap, and the ones that weren't (a repository's `AGENTS.md`, one MCP search) were easy to overlook until I looked.
+- **Anything the model reads is a prompt injection surface.** Repository files, memory, skills and MCP servers are all text written by someone else. The mitigations are the same in every case: limit what comes in, make it visible and don't give the agent authority that you wouldn't give the author of that text.
+- **The model's arguments aren't an authorisation boundary.** The host decides who the caller is and what the scope is. The model supplies a string.
+- **Frameworks leave gaps.** A framework is an opinionated implementation of a capability, so some things become easier and other things become more difficult. The Flue Framework doesn't attribute model calls to a person. An MCP result can't be capped. A repository's `AGENTS.md` can't be turned off, and a repository skill with the same name as a bundled one breaks the conversation. However, the Flue Framework also takes away much of the work of building an agent, and it makes the loop and the context visible.
+
+## Final thoughts
+
+MCP is the last way I've shown to give an agent something to do. It's a standard way to borrow a tool from someone else. It's both useful and a potential security threat. Look at what a server returns before you connect it, allowlist the tools you need, and watch what it puts in the context.
+
+The agent we started with was a chat app that made one model call per message and forgot everything when you reloaded the page. Seven parts later it has a loop, tools, a computer, a memory, skills and a connection to the outside world. The Flue Framework made it easy to add each capability. It's not a production harness, but a teaching example of the components that go into such a system.
+
+Thank you for reading along. If you want the final code, it's available on [GitHub](https://github.com/adrianhall/cf-demos/tree/coding-agent/part-7/flue-demos/coding-agent).
