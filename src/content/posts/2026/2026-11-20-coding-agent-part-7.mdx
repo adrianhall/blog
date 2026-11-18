@@ -66,9 +66,9 @@ There are two new places where things can go wrong. The server's *description* g
 
 ## What an MCP tool costs
 
-Tools introduce context in two places. First, the tool definition is added to the context to allow the model to request the tool. The definition is cheap. The documentation search tool's description and input schema come to roughly 180 tokens. For a tool with one `query` parameter, that's nothing.
+Tools (and the MCP service is just another tool) introduce context in two places. First, the tool definition is added to the context to allow the model to request the tool. The definition is cheap. The documentation search tool's description and input schema come to roughly 180 tokens. For a tool with one `query` parameter, that's nothing.
 
-Second, the result from calling the tool is added to the existing context on the next cycle through the model. The result is not cheap. One search can return multiple chunks of documentation and this result is added to the context. As an example, I ran several different searches against the Cloudflare documentation MCP server and counted the tokens in what the model would receive. A typical result consumes about 70 KB and 18,000 tokens for one search. Obviously, other tools will have different characteristics. The MCP server is in control of how much data it sends you. You can't ask for less.
+Second, the result from calling the tool is added to the existing context on the next cycle through the model. The result is not cheap. In our case, one search can return multiple chunks of documentation and this result is added to the context. As an example, I ran several different searches against the Cloudflare documentation MCP server and counted the tokens in what the model would receive. A typical result consumes about 70 KB and 18,000 tokens for one search. Obviously, other tools will have different characteristics. The MCP server is in control of how much data it sends you. You can't ask for less.
 
 Like all tool results, the effect compounds. That result is added to the short-term transcript that forms the context for the next call **and all subsequent calls**. This can lead to increased context spend and context exhaustion, which can ultimately increase hallucinations.
 
